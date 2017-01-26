@@ -26,13 +26,13 @@ if(!dir.exists('weather_data')){
 }
 
 for (i in 1:length(dates)){
+  this_date <- dates[i]
+  message(this_date)
   try({
     # Define a file name
     file_name <- paste0('weather_data/', this_date, '.RData')
     # Skip if the data is already there
     if(!file.exists(file_name)){
-      this_date <- dates[i]
-      message(this_date)
       this_url <- create_url(this_date)
       # Download file
       download.file(url = this_url,
@@ -44,6 +44,10 @@ for (i in 1:length(dates)){
       # Save
       save(r,
            file = file_name)
+      values(r)[values(r) == -9999] <- NA
+      # Remove the old stuff
+      file.remove('temp.tif')
+      file.remove('temp.tif.gz')
     }
   })
 }
