@@ -77,67 +77,77 @@ df$district <- toupper(df$district)
 df$district[df$district == 'MANHIÇA'] <- 'MANHICA'
 df$district[df$district == 'MATUTUÌNE'] <- 'MATUTUINE'
 
-# Get the overlap period
+# When two different data sources, use the average
 df <- df %>%
-  left_join(
-    df %>%
-      group_by(year, district, age, week) %>%
-      summarise(overlap = length(unique(src)) > 1),
-    by = c("year", "district", "age", "week")
-  )
-
-# Arrange by date
-df <- df %>%
-  arrange(year, week)
+  group_by(year, district, age, week) %>%
+  summarise(value = mean(value, na.rm = TRUE))
 
 # Get a "date" column (approximate)
 df$date <- as.Date(paste0(df$year, '-01-01')) + (7 * (df$week -1))
 
-# Remove the 0 cases in 2016 or 2017 (these are when systems were not yet
-# or were no longer operational)
-df <- df %>%
-  mutate(flag = year %in% 2016:2017 &
-           (value == 0 | is.na(value))) %>%
-  filter(!flag) %>%
-  dplyr::select(-flag)
+df_adjusted <- df
+df_adjusted$cases <- df_adjusted$value
 
-# Get a scaling factor for adjusting dhes cases to MB
-scale_data <- df %>%
-           filter(overlap) %>%
-           group_by(date, district, src) %>%
-           summarise(value = sum(value, na.rm = TRUE)) %>%
-  # group by place and see
-  group_by(district) %>%
-  summarise(d_over_m = sum(value[src == 'SIS-MA'], na.rm = TRUE) / 
-              sum(value[src == 'MB'], na.rm = TRUE))
 
-# Manually add in NAMAACHA
-scale_data <-
-  bind_rows(scale_data,
-            data_frame(district = 'NAMAACHA',
-                       d_over_m = 1))
+# # Get the overlap period
+# df <- df %>%
+#   left_join(
+#     df %>%
+#       group_by(year, district, age, week) %>%
+#       summarise(overlap = length(unique(src)) > 1),
+#     by = c("year", "district", "age", "week")
+#   )
+# 
+# # Arrange by date
+# df <- df %>%
+#   arrange(year, week)
+# 
 
-# Get an id column
-df$id <- paste0(df$year,
-                df$week,
-                df$district,
-                df$age)
-# Get adjusted cases using the scaling factor
-top <- df %>%
-  filter(src == 'MB') %>%
-  mutate(cases = value)
-bottom <- df %>%
-  filter(src == 'SIS-MA') %>%
-  mutate(src = 'SIS-MA adjusted') %>%
-  left_join(scale_data,
-            by = 'district') %>%
-  mutate(cases = value / d_over_m) %>%
-  dplyr::select(-d_over_m) %>%
-  filter(!id %in% unique(top$id))
-df_adjusted <-
-  bind_rows(top,
-            bottom) %>%
-  dplyr::select(-id, -overlap)
+# # Remove the 0 cases in 2016 or 2017 (these are when systems were not yet
+# # or were no longer operational)
+# df <- df %>%
+#   mutate(flag = year %in% 2016:2017 &
+#            (value == 0 | is.na(value))) %>%
+#   filter(!flag) %>%
+#   dplyr::select(-flag)
+# 
+# # Get a scaling factor for adjusting dhes cases to MB
+# scale_data <- df %>%
+#            filter(overlap) %>%
+#            group_by(date, district, src) %>%
+#            summarise(value = sum(value, na.rm = TRUE)) %>%
+#   # group by place and see
+#   group_by(district) %>%
+#   summarise(d_over_m = sum(value[src == 'SIS-MA'], na.rm = TRUE) / 
+#               sum(value[src == 'MB'], na.rm = TRUE))
+# 
+# # Manually add in NAMAACHA
+# scale_data <-
+#   bind_rows(scale_data,
+#             data_frame(district = 'NAMAACHA',
+#                        d_over_m = 1))
+# 
+# # Get an id column
+# df$id <- paste0(df$year,
+#                 df$week,
+#                 df$district,
+#                 df$age)
+# # Get adjusted cases using the scaling factor
+# top <- df %>%
+#   filter(src == 'MB') %>%
+#   mutate(cases = value)
+# bottom <- df %>%
+#   filter(src == 'SIS-MA') %>%
+#   mutate(src = 'SIS-MA adjusted') %>%
+#   left_join(scale_data,
+#             by = 'district') %>%
+#   mutate(cases = value / d_over_m) %>%
+#   dplyr::select(-d_over_m) %>%
+#   filter(!id %in% unique(top$id))
+# df_adjusted <-
+#   bind_rows(top,
+#             bottom) %>%
+#   dplyr::select(-id, -overlap)
 
 # Reorder columns
 df_adjusted <-
@@ -148,8 +158,7 @@ df_adjusted <-
                 district,
                 age,
                 # value, # no longer need this
-                cases,
-                src)
+                cases)
 
 
 
@@ -245,6 +254,7 @@ df_adjusted <-
 write_csv(df_adjusted, 'data/cleaned/cases.csv')
 
 # See incidence
+library(cism)
 ggplot(data = df_adjusted,
        aes(x = date,
            y = pk)) +
@@ -258,6 +268,24 @@ ggplot(data = df_adjusted,
                      values = c('darkgreen', 'darkorange')) +
   theme_cism()
 
+# See chart fo reach district
+districts <- sort(unique(df_adjusted$district))
+for (i in 1:length(districts)){
+  g <- ggplot(data = df_adjusted %>%
+           filter(district == districts[i]),
+         aes(x = date,
+             y = pk)) +
+    geom_line(aes(color = age)) +
+    labs(x = 'Date',
+         y = 'Incidence (cases per 1,000)',
+         title = paste0('Incidence in ', districts[i]),
+         subtitle = 'Cases per 1,000 inhabitants') +
+    scale_color_manual(name = 'Age',
+                       values = c('darkgreen', 'darkorange')) +
+    theme_cism()
+  print(g)
+  Sys.sleep(1)
+}
 
 
 
@@ -273,26 +301,24 @@ ggplot(data = df_adjusted,
 
 
 
-
-
-# View the overlap period
-
-ggplot(data = df %>%
-         filter(overlap) %>%
-         group_by(date, district, src) %>%
-         summarise(value = sum(value, na.rm = TRUE)),
-       aes(x = date,
-           y = value,
-           color = src)) +
-  geom_line() +
-  facet_wrap(~district,
-             scales = "free") +
-  labs(title = 'Concordance of SIS-MA and MB data',
-       subtitle = 'During the period for which both systems were active',
-       x = 'Date',
-       y = 'Cases') +
-  scale_color_manual(name = 'Source',
-                     values = c('red', 'green'))
+# 
+# # View the overlap period
+# ggplot(data = df %>%
+#          filter(overlap) %>%
+#          group_by(date, district, src) %>%
+#          summarise(value = sum(value, na.rm = TRUE)),
+#        aes(x = date,
+#            y = value,
+#            color = src)) +
+#   geom_line() +
+#   facet_wrap(~district,
+#              scales = "free") +
+#   labs(title = 'Concordance of SIS-MA and MB data',
+#        subtitle = 'During the period for which both systems were active',
+#        x = 'Date',
+#        y = 'Cases') +
+#   scale_color_manual(name = 'Source',
+#                      values = c('red', 'green'))
 
 # See what happens per place
 temp <- df_adjusted %>%
@@ -321,3 +347,14 @@ ggplot(data = temp,
        y = 'Cases (as percentage of 2010-2015 average)',
        title = 'The impact of MALTEM',
        subtitle = 'CISM')
+
+
+# Pre post
+temp$time <- 
+  ifelse(temp$date <= '2016-02-01', 'Pre-MALTEM',
+         'Post-MALTEM')
+
+temp %>%
+  group_by(magude, time) %>%
+  summarise(cases = sum(cases),
+            p = mean(p))
