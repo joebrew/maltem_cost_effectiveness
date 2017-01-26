@@ -251,7 +251,7 @@ df_adjusted <-
   mutate(pk = p * 1000)
 
 # Write data
-write_csv(df_adjusted, 'data/cleaned/cases.csv')
+# write_csv(df_adjusted, 'data/cleaned/cases.csv')
 
 # See incidence
 library(cism)

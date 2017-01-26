@@ -1,0 +1,73 @@
+---
+title: "Cost-effectiveness of a malaria elimination campaign"
+author: "Laia Cirera, Joe Brew, Elisa Sicuri"
+date: "26 de enero de 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r}
+knitr::opts_chunk$set(comment = NA, 
+               echo = FALSE, 
+               warning = FALSE, 
+               message = FALSE, 
+               error = TRUE, 
+               cache = FALSE)
+```
+
+```{r}
+library(readxl)
+library(tidyverse)
+
+# Read in Laias cost data
+costs <- read_excel("public_data/costs.xlsx")
+
+# Get yearly malaria cases for magude 
+
+# Create a column for % severe malaria
+# This will be the number of cases of ...
+
+# Read in incidence data
+bes <- read_csv("data/cleaned/cases.csv")
+```
+
+# Introduction
+
+The average incidence of malaria for our years of observation was `r round(mean(bes$pk, na.rm=TRUE),digits=2)`
+
+
+# Methodology
+
+WE analyzed data from bla bla bla
+
+# Results
+
+Our results show that the effectiveness of MALTEM's interventions is as follows: 
+
+```{r}
+plot(x=costs$year , y=costs$`Case fatality rate`, type="l",
+     xlab="YEAR", ylab="rate", main="Case fatality rate ACROSS TIME",
+     col="blue")
+```
+
+And here is another figure.
+
+```{r, fig.height = 8}
+
+ggplot(data = bes,
+       aes(x = date,
+           y = pk)) +
+  geom_line(aes(color = age)) +
+  facet_wrap(~district) +
+  labs(x = 'Date',
+       y = 'Incidence (cases per 1,000)',
+       title = 'Malaria incidence over time by district',
+       subtitle = 'Cases per 1,000 inhabitants') +
+  scale_color_manual(name = 'Age',
+                     values = c('darkgreen', 'darkorange'))
+```
+
+# Discussion
