@@ -22,32 +22,35 @@ dates <- seq(as.Date('2010-01-01'),
 
 # If no weather_data dir, create on
 if(!dir.exists('weather_data')){
-  create.dir('weather_data')
+  dir.create('weather_data')
 }
 
 for (i in 1:length(dates)){
   this_date <- dates[i]
+  start_time <- Sys.time()
   message(this_date)
   try({
     # Define a file name
-    file_name <- paste0('weather_data/', this_date, '.RData')
+    file_name <- paste0('weather_data/', this_date, '.tif')
     # Skip if the data is already there
     if(!file.exists(file_name)){
       this_url <- create_url(this_date)
+      # Remove the old stuff
+      file.remove('temp.tif')
+      file.remove('temp.tif.gz')
       # Download file
       download.file(url = this_url,
                     destfile = 'temp.tif.gz')
       # Extract
       R.utils::gunzip('temp.tif.gz')
-      # Read as raster
-      r <- raster('temp.tif')
-      # Save
-      save(r,
-           file = file_name)
-      values(r)[values(r) == -9999] <- NA
-      # Remove the old stuff
-      file.remove('temp.tif')
-      file.remove('temp.tif.gz')
+      # Move
+      file.copy(from = 'temp.tif',
+                to = file_name)
+      message('---------------------------------')
+      end_time <- Sys.time()
+      message(paste0('That took ',
+                     round(as.numeric(end_time - start_time), digits = 2),
+                     ' seconds.'))
     }
   })
 }
