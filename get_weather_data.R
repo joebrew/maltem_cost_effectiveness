@@ -1,5 +1,6 @@
 library(raster)
 library(R.utils)
+library(tidyverse)
 
 # Define function for creating link to data
 create_url <- function(date = '2010-01-01'){
@@ -54,3 +55,78 @@ for (i in 1:length(dates)){
     }
   })
 }
+
+# Aggregate weather data
+###########################
+
+# Get a map of maputo province
+library(cism)
+maputo <- moz2
+maputo <- maputo[which(maputo@data$NAME_1 == 'Maputo'),]
+
+# Get the centroid of each district in maputo province
+centroids <-
+  data.frame(district = toupper(maputo@data$NAME_2),
+             x = coordinates(maputo)[,1],
+             y = coordinates(maputo)[,2])
+
+
+# Get a place to store aggregated data
+if(!dir.exists('weather_data/aggregated')){
+  dir.create('weather_data/aggregated')
+}
+
+# Read each of the files
+files <- dir('weather_data/')
+files <- files[grepl('.tif', files, fixed = TRUE)]
+
+# Go into weather data
+setwd('weather_data/')
+
+# Read in each file and combine
+results <- list()
+for (i in 1:length(files)){
+  this_file <- files[i]
+  this_date <- as.Date(gsub('.tif', '', this_file, fixed = TRUE))
+  r <- raster(this_file)
+  
+  # Extract the values
+  x <- raster::extract(r, centroids[,2:3])
+  
+  # Create a dataframe output
+  output <- centroids %>%
+    dplyr::select(district)
+  output$date <- this_date
+  output$precipitation <- x
+  results[[i]] <- output
+  message(this_date)
+}
+
+# Add together all the results
+precipitation <- bind_rows(results)
+precipitation <- 
+  precipitation %>%
+  dplyr::select(date, district, precipitation)
+precipitation$year <- as.numeric(format(precipitation$date, '%Y'))
+precipitation$month <- as.numeric(format(precipitation$date, '%m'))
+precipitation$day <- as.numeric(format(precipitation$date, '%d'))
+precipitation$week <- as.numeric(format(precipitation$date, '%U')) + 1
+
+
+# Aggregate
+precipitation_daily <- precipitation
+precipitation_weekly <- 
+  precipitation %>%
+  group_by(year, week, district) %>%
+  summarise(precipitation = sum(precipitation, na.rm = TRUE))
+precipitation_monthly <- 
+  precipitation %>%
+  group_by(year, month, district) %>%
+  summarise(precipitation = sum(precipitation, na.rm = TRUE))
+
+# Store the results
+write_csv(precipitation_daily, 'aggregated/precipitation_daily.csv')
+write_csv(precipitation_weekly, 'aggregated/precipitation_weekly.csv')
+write_csv(precipitation_monthly, 'aggregated/precipitation_monthly.csv')
+
+setwd('..')
