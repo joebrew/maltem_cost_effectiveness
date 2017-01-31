@@ -165,3 +165,8 @@ if(file.exists('aggregated/precipitation_daily.csv') &
 }
 
 setwd('..')
+
+# Remove unecessary objects
+rm(centroids,
+   dates, file_name, files, i,
+   start_time, this_date, create_url)

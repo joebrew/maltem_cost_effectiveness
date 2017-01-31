@@ -1,16 +1,37 @@
+# Libraries
 library(tidyverse)
-df <- read_csv('data/cleaned/cases.csv')
-precip <- read_csv('weather_data/aggregated/precipitation_weekly.csv')
 
-df$month <- as.numeric(format(df$date, '%m'))
-df$day <- as.numeric(format(df$date, '%d'))
+# BES data
+source('get_bes_data.R')
 
+# Precipitation data
+source('get_weather_data.R')
+
+# IRS data
+source('get_irs_data.R')
+
+# Join malaria cases with precipitation
 df <-
   left_join(x = df,
-            y = precip,
+            y = precipitation_weekly,
             by = c('district', 'year', 'week'))
 
-write_csv(df, 'data/cleaned/cases_with_precipitation.csv')
+# Join with IRS
+df <- 
+  left_join(x = df,
+            y = irs %>%
+              dplyr::select(-houses) %>%
+              rename(people_irs = people),
+            by = c('district', 'year')) 
+
+# Get IRS coverage
+df <- df %>%
+  group_by(district, year, week) %>%
+  mutate(district_population = sum(population, na.rm = TRUE)) %>%
+  mutate(irs_coverage = people_irs / district_population * 100)
+
+
+write_csv(df, 'data/outputs/master.csv')
 
 library(cism)
 ggplot(data = df,
@@ -41,3 +62,16 @@ ggplot(data = df %>%
   theme_bw() +
   scale_color_manual(name = 'Year',
                      values = cols)
+
+
+# IRS coverage
+x <- df %>%
+  group_by(district, year) %>%
+  summarise(irs_coverage = mean(irs_coverage))
+
+ggplot(data = x,
+       aes(x = year, 
+           y = irs_coverage,
+           color = district,
+           group = district)) +
+  geom_line()

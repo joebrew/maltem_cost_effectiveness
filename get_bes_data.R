@@ -85,8 +85,8 @@ df <- df %>%
 # Get a "date" column (approximate)
 df$date <- as.Date(paste0(df$year, '-01-01')) + (7 * (df$week -1))
 
-df_adjusted <- df
-df_adjusted$cases <- df_adjusted$value
+df <- df
+df$cases <- df$value
 
 
 # # Get the overlap period
@@ -144,14 +144,14 @@ df_adjusted$cases <- df_adjusted$value
 #   mutate(cases = value / d_over_m) %>%
 #   dplyr::select(-d_over_m) %>%
 #   filter(!id %in% unique(top$id))
-# df_adjusted <-
+# df <-
 #   bind_rows(top,
 #             bottom) %>%
 #   dplyr::select(-id, -overlap)
 
 # Reorder columns
-df_adjusted <-
-  df_adjusted %>%
+df <-
+  df %>%
   dplyr::select(date,
                 year,
                 week,
@@ -238,123 +238,133 @@ pop <- pop %>%
 pop$district[pop$district == 'MANHIÇA'] <- 'MANHICA'
 
 # Join population to data
-df_adjusted  <- df_adjusted %>%
+df  <- df %>%
   left_join(pop,
             by = c("year", "district", 'age'))
 
 
 
 # Make incidence
-df_adjusted <- 
-  df_adjusted %>%
+df <- 
+  df %>%
   mutate(p = cases / population) %>%
   mutate(pk = p * 1000)
 
+# Get some date objects
+df$month <- as.numeric(format(df$date, '%m'))
+df$day <- as.numeric(format(df$date, '%d'))
+
+
 # Write data
-# write_csv(df_adjusted, 'data/cleaned/cases.csv')
+write_csv(df, 'data/outputs/cases.csv')
 
-# See incidence
-library(cism)
-ggplot(data = df_adjusted,
-       aes(x = date,
-           y = pk)) +
-  geom_line(aes(color = age)) +
-  facet_wrap(~district) +
-  labs(x = 'Date',
-       y = 'Incidence (cases per 1,000)',
-       title = 'Malaria incidence over time by district',
-       subtitle = 'Cases per 1,000 inhabitants') +
-  scale_color_manual(name = 'Age',
-                     values = c('darkgreen', 'darkorange')) +
-  theme_cism()
+# Remove unecessary objects
+rm(d2, mb, pop,
+   final_list, i, sh,
+   read_population)
 
-# See chart fo reach district
-districts <- sort(unique(df_adjusted$district))
-for (i in 1:length(districts)){
-  g <- ggplot(data = df_adjusted %>%
-           filter(district == districts[i]),
-         aes(x = date,
-             y = pk)) +
-    geom_line(aes(color = age)) +
-    labs(x = 'Date',
-         y = 'Incidence (cases per 1,000)',
-         title = paste0('Incidence in ', districts[i]),
-         subtitle = 'Cases per 1,000 inhabitants') +
-    scale_color_manual(name = 'Age',
-                       values = c('darkgreen', 'darkorange')) +
-    theme_cism()
-  print(g)
-  Sys.sleep(1)
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 
-# # View the overlap period
-# ggplot(data = df %>%
-#          filter(overlap) %>%
-#          group_by(date, district, src) %>%
-#          summarise(value = sum(value, na.rm = TRUE)),
+# # See incidence
+# library(cism)
+# ggplot(data = df,
 #        aes(x = date,
-#            y = value,
-#            color = src)) +
-#   geom_line() +
-#   facet_wrap(~district,
-#              scales = "free") +
-#   labs(title = 'Concordance of SIS-MA and MB data',
-#        subtitle = 'During the period for which both systems were active',
-#        x = 'Date',
-#        y = 'Cases') +
-#   scale_color_manual(name = 'Source',
-#                      values = c('red', 'green'))
-
-# See what happens per place
-temp <- df_adjusted %>%
-  mutate(magude = ifelse(district == 'MAGUDE',
-                         'Magude',
-                         'Rest of Maputo province')) %>%
-  group_by(date, magude) %>%
-  summarise(cases = sum(cases, na.rm = TRUE)) %>%
-  arrange(date) %>%
-  group_by(magude) %>%
-  mutate(avg = mean(cases[lubridate::year(date) %in% 2010:2015], 
-                         na.rm = TRUE)) %>%
-  ungroup %>%
-  mutate(p = cases / avg * 100)
-library(cism)
-ggplot(data = temp,
-       aes(x = date,
-           y = p,
-           color = magude)) +
-  geom_line(alpha = 0.8) +
-  # geom_smooth(alpha = 0.2) +
-  scale_color_manual(name = '',
-                     values = c('darkblue', 'darkorange')) +
-  theme_cism() +
-  labs(x = 'Date',
-       y = 'Cases (as percentage of 2010-2015 average)',
-       title = 'The impact of MALTEM',
-       subtitle = 'CISM')
-
-
-# Pre post
-temp$time <- 
-  ifelse(temp$date <= '2016-02-01', 'Pre-MALTEM',
-         'Post-MALTEM')
-
-temp %>%
-  group_by(magude, time) %>%
-  summarise(cases = sum(cases),
-            p = mean(p))
+#            y = pk)) +
+#   geom_line(aes(color = age)) +
+#   facet_wrap(~district) +
+#   labs(x = 'Date',
+#        y = 'Incidence (cases per 1,000)',
+#        title = 'Malaria incidence over time by district',
+#        subtitle = 'Cases per 1,000 inhabitants') +
+#   scale_color_manual(name = 'Age',
+#                      values = c('darkgreen', 'darkorange')) +
+#   theme_cism()
+# 
+# # See chart fo reach district
+# districts <- sort(unique(df$district))
+# for (i in 1:length(districts)){
+#   g <- ggplot(data = df %>%
+#            filter(district == districts[i]),
+#          aes(x = date,
+#              y = pk)) +
+#     geom_line(aes(color = age)) +
+#     labs(x = 'Date',
+#          y = 'Incidence (cases per 1,000)',
+#          title = paste0('Incidence in ', districts[i]),
+#          subtitle = 'Cases per 1,000 inhabitants') +
+#     scale_color_manual(name = 'Age',
+#                        values = c('darkgreen', 'darkorange')) +
+#     theme_cism()
+#   print(g)
+#   Sys.sleep(1)
+# }
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# # 
+# # # View the overlap period
+# # ggplot(data = df %>%
+# #          filter(overlap) %>%
+# #          group_by(date, district, src) %>%
+# #          summarise(value = sum(value, na.rm = TRUE)),
+# #        aes(x = date,
+# #            y = value,
+# #            color = src)) +
+# #   geom_line() +
+# #   facet_wrap(~district,
+# #              scales = "free") +
+# #   labs(title = 'Concordance of SIS-MA and MB data',
+# #        subtitle = 'During the period for which both systems were active',
+# #        x = 'Date',
+# #        y = 'Cases') +
+# #   scale_color_manual(name = 'Source',
+# #                      values = c('red', 'green'))
+# 
+# # See what happens per place
+# temp <- df %>%
+#   mutate(magude = ifelse(district == 'MAGUDE',
+#                          'Magude',
+#                          'Rest of Maputo province')) %>%
+#   group_by(date, magude) %>%
+#   summarise(cases = sum(cases, na.rm = TRUE)) %>%
+#   arrange(date) %>%
+#   group_by(magude) %>%
+#   mutate(avg = mean(cases[lubridate::year(date) %in% 2010:2015], 
+#                          na.rm = TRUE)) %>%
+#   ungroup %>%
+#   mutate(p = cases / avg * 100)
+# library(cism)
+# ggplot(data = temp,
+#        aes(x = date,
+#            y = p,
+#            color = magude)) +
+#   geom_line(alpha = 0.8) +
+#   # geom_smooth(alpha = 0.2) +
+#   scale_color_manual(name = '',
+#                      values = c('darkblue', 'darkorange')) +
+#   theme_cism() +
+#   labs(x = 'Date',
+#        y = 'Cases (as percentage of 2010-2015 average)',
+#        title = 'The impact of MALTEM',
+#        subtitle = 'CISM')
+# 
+# 
+# # Pre post
+# temp$time <- 
+#   ifelse(temp$date <= '2016-02-01', 'Pre-MALTEM',
+#          'Post-MALTEM')
+# 
+# temp %>%
+#   group_by(magude, time) %>%
+#   summarise(cases = sum(cases),
+#             p = mean(p))
