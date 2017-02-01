@@ -38,12 +38,14 @@ bes <- read_csv("data/cleaned/cases.csv")
 
 The average incidence of malaria for our years of observation was `r round(mean(bes$pk, na.rm=TRUE),digits=2)`
 
-bla bla bla
 
 
 # Methodology
 
-WE analyzed data from bla bla bla
+##Study site
+
+
+
 
 # Results
 
