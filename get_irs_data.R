@@ -1,4 +1,4 @@
 library(tidyverse)
+library(readxl)
 
-irs <- read_delim('data/IRS_Maputo Province_clean.csv',
-                  delim = ';')
+irs <- read_excel('data/IRS_Maputo Province_clean.xlsx')
