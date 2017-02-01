@@ -242,7 +242,8 @@ df  <- df %>%
   left_join(pop,
             by = c("year", "district", 'age'))
 
-
+# Substitute NA with 0
+df$cases[is.na(df$cases)] <- 0
 
 # Make incidence
 df <- 

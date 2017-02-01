@@ -1,15 +1,20 @@
 ---
 title: "Cost-effectiveness of a malaria elimination campaign"
 author: "Laia Cirera, Joe Brew, Elisa Sicuri"
-date: "1 de fevereiro de 2017"
-output: html_document
+date: "`r Sys.Date()`"
+output:
+ tufte::tufte_html: default
+ tufte::tufte_handout:
+   citation_package: natbib
+   latex_engine: xelatex
+ tufte::tufte_book:
+   citation_package: natbib
+   latex_engine: xelatex
+bibliography: bibliography.bib
+link-citations: yes
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
-```
-
-```{r}
 knitr::opts_chunk$set(comment = NA, 
                echo = FALSE, 
                warning = FALSE, 
@@ -18,9 +23,11 @@ knitr::opts_chunk$set(comment = NA,
                cache = FALSE)
 ```
 
+
 ```{r}
 library(readxl)
 library(tidyverse)
+library(broom)
 
 # Read in costs database 
 costs <- read_excel("public_data/costs.xlsx")
@@ -28,11 +35,90 @@ costs <- read_excel("public_data/costs.xlsx")
 # Read in epi parameters 
 parameters <- read_excel("public_data/parameters.xlsx")
 
-# Read in incidence data
-bes <- read_csv("data/cleaned/cases.csv")
+# Read in incidence data and weatehr data
+source("master.R")
+bes <- df
+
+
+# Create variables 
+bes <- 
+  bes %>%
+  mutate(mda=ifelse(date<"2015-11-08", "pre_mda", 
+                    ifelse(date<"2016-02-04", "mda", "post_mda")),
+         intervention=district=="MAGUDE")
+
+# Create model to estimate effectiveness
+mod <-lm(p ~ mda*intervention + irs_coverage + age, data=bes, weights = population)
 ```
 
-Short formula in R: `r round(mean(bes$pk, na.rm=TRUE),digits=2)`
+Model parameters
+
+```{r}
+
+# Explore results of linear model
+# knitr::kable(tidy(summary(mod)))
+```
+
+```{r}
+
+
+
+
+# Use model to predict conterfactual
+other_irs <- bes %>% filter(year == 2016, district != "MAGUDE") %>% summarise(x =mean(irs_coverage, na.rm =TRUE)) %>% .$x
+counter_factual <- 
+   bes %>% filter(year == 2016, 
+                  district == "MAGUDE")
+counter_factual <- 
+  counter_factual %>%
+  mutate(irs_coverage = other_irs) %>%
+  mutate(intervention = FALSE)
+
+counter_factual$p_cf <- predict(mod, counter_factual)
+counter_factual$cases_cf <- counter_factual$p_cf*counter_factual$population 
+counter_factual$cases_averted <- counter_factual$cases_cf - counter_factual$cases
+
+# Get sum of averted cases
+ac <- counter_factual %>%
+  group_by(age)%>%
+  summarise(sum_cases_averted=sum(cases_averted))
+  
+# Get the reduction in incidence
+inc <-
+  counter_factual %>%
+  group_by(age)%>%
+  summarise(reduction = (mean(p_cf) - mean(p)) / mean(p_cf) * 100)
+
+# Plot the observed and counterfactual
+plot_data <- counter_factual %>%
+  group_by(date) %>%
+  summarise(cases = sum(cases),
+            cases_cf = sum(cases_cf),
+            cases_averted = sum(cases_averted)) %>%
+  gather(key, value, cases:cases_averted) %>%
+  filter(key != "cases_averted") %>%
+  mutate(key = ifelse(key == "cases", "MALTEM", "Counter-factual"))
+
+# library(ggthemes)
+# ggplot(data=plot_data,
+#        aes(x=date,
+#            y=value,
+#            color=key))+
+#   geom_line(size =2,
+#             alpha = 0.6) + 
+#   labs(title="Observed malaria cases vs counterfactual",
+#        subtitle="Post-MDA period, 2016",
+#        x="Date",
+#        y="Malaria cases") +
+#   theme_minimal() +
+#   scale_color_manual(name = "",
+#                      values = c("red", "darkgreen"))
+
+### Create new variables in our epi data related to clinical events
+
+
+```
+
 
 
 # Introduction
@@ -40,6 +126,7 @@ Short formula in R: `r round(mean(bes$pk, na.rm=TRUE),digits=2)`
 Mozambique is one of the 10 highest-malaria burden countries in the world, with parasite prevalence ranging from 3 to more than 50%. Although large drops in transmission can be achieved in a limited timeframe, indoor residual spraying and case management alone are not sufficient to attain elimination (Okumu et al, 2011). 
 
 Within this context and in line with the global and regional efforts towards malaria elimination, a five year malaria elimination program that started in 2014 has been established in Magude District (Mozambique) through Centro de Investigação em Saúde de Manhiça (CISM). The main objective of this program is to assist the NMCP in adopting targeted evidence-based elimination plans through a 'learn by doing' strategy that begins in program mode and incorporates data from rigorous evaluation-into action as it is continuously being generated. Besides developing a fully costed, targeted, evidence-based elimination plan for Southern Mozambique, the first two years of this program have generated knowledge to inform the programmatic aspects of the elimination plan, most importantly how to interrupt transmission. It has also provided coordination, management and capacity building support to the NMCP, and facilitated the adoption of evidence-based malaria policies through the creation of a Malaria Technical Advisory Committee in the country. 
+
 The  MALTEM program will provide technical, operational and financial support to design and scale up new strategies for the Mozambican National Malaria Control Program (NMCP) to achieve elimination in Maputo and significantly decrease malaria transmission rates in Gaza and Inhambane provinces by 2020. 
 
 Within this context, a rigorous costing analysis needs to be carried out in order to assess the viability of MALTEM strategies and guarantee the financial sustainability of the project across time.  Firstly, this study estimates the costs associated with malaria elimination activities in the district of Magude and models these costs, in accordance to economic theory principles, evidence from literature on malaria elimination as well as from WHO guidelines, across time. These costs are then compared with malaria control costs to identify potential savings of resources associated with malaria elimination, in the medium/long run. The whole analysis allows us assessing whether it malaria elimination (by comparing the costs of malaria elimination vs. costs of malaria control activities implementation and estimating the quantity and value of additional resource requirements to achieve malaria elimination), is financially affordable and sustainable over the next 10 years, but also, to which extend malaria elimination is also cost-effective compared to malaria control interventions.  
@@ -48,7 +135,7 @@ Within this context, a rigorous costing analysis needs to be carried out in orde
 
 ##Study area and population
 
-The malaria elimination is taking place in Magude District, on the North-Western area of Maputo Province, Southern Mozambique. Magude District borders with the district of Massingir (Gaza Province), in the North, Manhiça District and the province of Gaza (Chokwe and Bilene Districts) on the East, Moamba District in the South, and the South African Kruger National Park on the West. It has an area of 6,961 km2, with approximately 60,000 individuals and 11,408 family compounds. The district has seven health facilities with a total of 43 beds (1.65 beds per 1,000 inhabitants) and reported 20,000 malaria cases per 100,000 population at risk in 2012.
+The malaria elimination is taking place in Magude District, on the North-Western area of Maputo Province, Southern Mozambique. Magude District borders with the district of Massingir (Gaza Province), in the North, Manhiça District and the province of Gaza (Chokwe and Bilene Districts) on the East, Moamba District in the South, and the South African Kruger National Park on the West. It has an area of 6,961 km2, with approximately 60,000 individuals and 11,408 family compounds. The district has seven health facilities with a total of 43 beds ^[(1.65 beds per 1,000 inhabitants)]  and reported 20,000 malaria cases per 100,000 population at risk in 2012.
 
 Manhiça district has been used as a comparator area for the analysis of the interventions, costing and variables of interest. Manhiça, located 80km north of the capital, Maputo, is a semi-rural area, with a population of 165.497 habitants. As of 2016, malaria remains one of the main causes of under-five morbidity and mortality in the district. 
 
