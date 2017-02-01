@@ -28,6 +28,8 @@ knitr::opts_chunk$set(comment = NA,
 library(readxl)
 library(tidyverse)
 library(broom)
+library(ggthemes)
+
 
 # Read in costs database 
 costs <- read_excel("public_data/costs.xlsx")
@@ -38,7 +40,6 @@ parameters <- read_excel("public_data/parameters.xlsx")
 # Read in incidence data and weatehr data
 source("master.R")
 bes <- df
-
 
 # Create variables 
 bes <- 
@@ -60,15 +61,21 @@ Model parameters
 ```
 
 ```{r}
-
-
-
-
 # Use model to predict conterfactual
 other_irs <- bes %>% filter(year == 2016, district != "MAGUDE") %>% summarise(x =mean(irs_coverage, na.rm =TRUE)) %>% .$x
 counter_factual <- 
    bes %>% filter(year == 2016, 
                   district == "MAGUDE")
+results <- list()
+for (i in 2016:2025){
+  new_year <- counter_factual %>%
+    mutate(year = i) 
+  results[[i]] <- new_year
+}
+counter_factual <- bind_rows(results)
+counter_factual$date <- 
+  as.Date(paste0(counter_factual$year, substr(counter_factual$date, 5, 10)))
+
 counter_factual <- 
   counter_factual %>%
   mutate(irs_coverage = other_irs) %>%
@@ -80,43 +87,143 @@ counter_factual$cases_averted <- counter_factual$cases_cf - counter_factual$case
 
 # Get sum of averted cases
 ac <- counter_factual %>%
+  filter(year == 2016) %>%
   group_by(age)%>%
   summarise(sum_cases_averted=sum(cases_averted))
   
 # Get the reduction in incidence
 inc <-
   counter_factual %>%
+  filter(year == 2016) %>%
   group_by(age)%>%
   summarise(reduction = (mean(p_cf) - mean(p)) / mean(p_cf) * 100)
 
-# Plot the observed and counterfactual
-plot_data <- counter_factual %>%
-  group_by(date) %>%
-  summarise(cases = sum(cases),
-            cases_cf = sum(cases_cf),
-            cases_averted = sum(cases_averted)) %>%
-  gather(key, value, cases:cases_averted) %>%
-  filter(key != "cases_averted") %>%
-  mutate(key = ifelse(key == "cases", "MALTEM", "Counter-factual"))
-
-# library(ggthemes)
-# ggplot(data=plot_data,
-#        aes(x=date,
-#            y=value,
-#            color=key))+
-#   geom_line(size =2,
-#             alpha = 0.6) + 
-#   labs(title="Observed malaria cases vs counterfactual",
-#        subtitle="Post-MDA period, 2016",
-#        x="Date",
-#        y="Malaria cases") +
-#   theme_minimal() +
-#   scale_color_manual(name = "",
-#                      values = c("red", "darkgreen"))
-
 ### Create new variables in our epi data related to clinical events
+counter_factual <- 
+  counter_factual %>%
+  mutate(cases_non_severe = cases * parameters$value[parameters$parameter == 'p_non_sev'],
+         cases_non_severe_cf = cases_cf * parameters$value[parameters$parameter == 'p_non_sev'],
+         cases_severe = cases * parameters$value[parameters$parameter == 'p_sev'],
+         cases_severe_cf = cases_cf * parameters$value[parameters$parameter == 'p_sev'],
+         deaths = cases * parameters$value[parameters$parameter == 'cfr'],
+         deaths_cf = cases_cf * parameters$value[parameters$parameter == 'cfr'],
+         cost_outpatient = cases_non_severe * parameters$value[parameters$parameter == 'cost_outp_usd'],
+         cost_outpatient_cf = cases_non_severe_cf * parameters$value[parameters$parameter == 'cost_outp_usd'],
+        cost_inpatient = cases_severe * parameters$value[parameters$parameter == 'cost_inp_usd'],
+        cost_inpatient_cf = cases_severe_cf * parameters$value[parameters$parameter == 'cost_inp_usd']) %>%
+  mutate(cost_clinical = cost_inpatient + cost_outpatient,
+         cost_clinical_cf = cost_inpatient_cf + cost_outpatient_cf)
+
+# Dollars per case averted
+# We have cases_averted
+# We also have clinical costs saved
+# We need program costs
+
+# 2016
+# dpca = program costs + real clinical costs / cf program costs + cf clinical costs
+
+# We need to differentiate between program costs (MALTEM) and intervention costs
+intervention_costs <- costs[!costs$elimination_activity %in% c('Entomology', 'REACT'),]
+
+intervention_costs <-
+  intervention_costs %>%
+  # MALTEM COSTS
+  mutate(cost_maltem = 
+              (resource_use * 
+              q_maltem *
+              p_maltem *
+              yearly_regularity / 
+              useful_life)) %>%
+  mutate(transport_meticais = ifelse(transport_cost, 0.25 * cost_maltem, 0),
+         import_meticais = ifelse(import_tax, 0.4 * cost_maltem, 0),
+         operating_meticais = ifelse(operating_cost, 0.1 * cost_maltem, 0),
+         maintenance_meticais = ifelse(maintenance_cost, 0.15 * cost_maltem, 0)) %>%
+  mutate(cost_maltem = 
+           cost_maltem +
+           transport_meticais +
+           import_meticais +
+           operating_meticais +
+           maintenance_meticais) %>%
+  mutate(cost_basic = 
+           (resource_use * 
+              q_basic *
+              (p_basic_perc * p_maltem) *
+              yearly_regularity / 
+              useful_life)) %>%
+    mutate(transport_meticais_basic = ifelse(transport_cost, 0.25 * cost_maltem, 0),
+         import_meticais_basic = ifelse(import_tax, 0.2 * cost_maltem, 0),
+         operating_meticais_basic = ifelse(operating_cost, 0.1 * cost_maltem, 0),
+         maintenance_meticais_basic = ifelse(maintenance_cost, 0.15 * cost_maltem, 0)) %>%
+    mutate(cost_basic = 
+           cost_basic +
+           transport_meticais_basic +
+           import_meticais_basic +
+           operating_meticais_basic +
+           maintenance_meticais_basic) %>%
+  dplyr::select(elimination_activity,
+                budget_category,
+                baseline_year,
+                item,
+                description,
+                cost_basic,
+                cost_maltem) %>%
+  mutate(cost_basic = ifelse(is.na(cost_basic), 0, cost_basic))
+
+# Get total intervention costs
+total_intervention_cost <- 
+  intervention_costs[,c('cost_basic', 'cost_maltem')]
+total_intervention_cost <-
+  tidy(apply(total_intervention_cost, 2, sum, na.rm = TRUE) / 75)
+
+# Get a counterfactula for government
+cf_costs <- intervention_costs %>%
+  filter(elimination_activity %in% c('IRS', 'LLIN')) %>%
+  summarise(x = sum(cost_basic) / 75)
+cf_costs <- data_frame(names = 'counter_factual',
+                       x = cf_costs$x)
 
 
+total_intervention_cost <-
+  bind_rows(total_intervention_cost,
+            cf_costs)
+names(total_intervention_cost)[2] <- 'cost'
+
+ggplot(data = total_intervention_cost,
+       aes(x= names,
+           y = cost)) +
+  geom_bar(stat = 'identity') +
+  labs(x = 'Scenario',
+       y = 'US Dollars',
+       title = 'Comparative costs of malaria control/elimination approaches',
+       subtitle = 'USD') +
+  geom_label(aes(label = round(cost)))
+
+# Add clinical costs to our total_intervention_cost dataset
+clinical_costs <- 
+  counter_factual %>%
+  filter(year == 2016) %>%
+  summarise(counter_factual = sum(counter_factual$cost_clinical_cf),
+            cost_basic = sum(counter_factual$cost_clinical),
+            cost_maltem = sum(counter_factual$cost_clinical))
+clinical_costs <- tidy(t(clinical_costs))
+names(clinical_costs) <- c('names', 'clinical_cost')
+total_intervention_cost <-
+  left_join(x = total_intervention_cost,
+            y = clinical_costs,
+            by = 'names')
+
+# Get total cost (program plus clinic)
+total_intervention_cost$total_cost <-
+  total_intervention_cost$cost +
+  total_intervention_cost$clinical_cost
+
+# Get total cases for 2016 under both scenarios
+x <- counter_factual %>%
+  filter(year == 2016) %>%
+  summarise(cases_maltem = sum(cases),
+            cases_cf = sum(cases_cf))
+
+DT::datatable(total_intervention_cost)
 ```
 
 
@@ -125,7 +232,7 @@ plot_data <- counter_factual %>%
 
 Mozambique is one of the 10 highest-malaria burden countries in the world, with parasite prevalence ranging from 3 to more than 50%. Although large drops in transmission can be achieved in a limited timeframe, indoor residual spraying and case management alone are not sufficient to attain elimination (Okumu et al, 2011). 
 
-Within this context and in line with the global and regional efforts towards malaria elimination, a five year malaria elimination program that started in 2014 has been established in Magude District (Mozambique) through Centro de Investigação em Saúde de Manhiça (CISM). The main objective of this program is to assist the NMCP in adopting targeted evidence-based elimination plans through a 'learn by doing' strategy that begins in program mode and incorporates data from rigorous evaluation-into action as it is continuously being generated. Besides developing a fully costed, targeted, evidence-based elimination plan for Southern Mozambique, the first two years of this program have generated knowledge to inform the programmatic aspects of the elimination plan, most importantly how to interrupt transmission. It has also provided coordination, management and capacity building support to the NMCP, and facilitated the adoption of evidence-based malaria policies through the creation of a Malaria Technical Advisory Committee in the country. 
+Within this context and in line with the global and regional efforts towards malaria elimination, a five year malaria elimination program that started in 2014 has been established in Magude District (Mozambique) through Centro de Investiga??o em Sa?de de Manhi?a (CISM). The main objective of this program is to assist the NMCP in adopting targeted evidence-based elimination plans through a 'learn by doing' strategy that begins in program mode and incorporates data from rigorous evaluation-into action as it is continuously being generated. Besides developing a fully costed, targeted, evidence-based elimination plan for Southern Mozambique, the first two years of this program have generated knowledge to inform the programmatic aspects of the elimination plan, most importantly how to interrupt transmission. It has also provided coordination, management and capacity building support to the NMCP, and facilitated the adoption of evidence-based malaria policies through the creation of a Malaria Technical Advisory Committee in the country. 
 
 The  MALTEM program will provide technical, operational and financial support to design and scale up new strategies for the Mozambican National Malaria Control Program (NMCP) to achieve elimination in Maputo and significantly decrease malaria transmission rates in Gaza and Inhambane provinces by 2020. 
 
@@ -135,13 +242,13 @@ Within this context, a rigorous costing analysis needs to be carried out in orde
 
 ##Study area and population
 
-The malaria elimination is taking place in Magude District, on the North-Western area of Maputo Province, Southern Mozambique. Magude District borders with the district of Massingir (Gaza Province), in the North, Manhiça District and the province of Gaza (Chokwe and Bilene Districts) on the East, Moamba District in the South, and the South African Kruger National Park on the West. It has an area of 6,961 km2, with approximately 60,000 individuals and 11,408 family compounds. The district has seven health facilities with a total of 43 beds ^[(1.65 beds per 1,000 inhabitants)]  and reported 20,000 malaria cases per 100,000 population at risk in 2012.
+The malaria elimination is taking place in Magude District, on the North-Western area of Maputo Province, Southern Mozambique. Magude District borders with the district of Massingir (Gaza Province), in the North, Manhi?a District and the province of Gaza (Chokwe and Bilene Districts) on the East, Moamba District in the South, and the South African Kruger National Park on the West. It has an area of 6,961 km2, with approximately 60,000 individuals and 11,408 family compounds. The district has seven health facilities with a total of 43 beds ^[(1.65 beds per 1,000 inhabitants)]  and reported 20,000 malaria cases per 100,000 population at risk in 2012.
 
-Manhiça district has been used as a comparator area for the analysis of the interventions, costing and variables of interest. Manhiça, located 80km north of the capital, Maputo, is a semi-rural area, with a population of 165.497 habitants. As of 2016, malaria remains one of the main causes of under-five morbidity and mortality in the district. 
+Manhi?a district has been used as a comparator area for the analysis of the interventions, costing and variables of interest. Manhi?a, located 80km north of the capital, Maputo, is a semi-rural area, with a population of 165.497 habitants. As of 2016, malaria remains one of the main causes of under-five morbidity and mortality in the district. 
 
 ##Study design
 
-The study we propose is not a randomized one. Malaria elimination activities will be carried out in Magude and not in a randomized way (it is not possible to randomize a district based malaria elimination campaign). In order to identify the impact of malaria elimination activities on indicators of impact and in order to perform the general cost-effectiveness analyses, a comparator is needed. There is rich data existent in Manhiça district, where CISM is located. However, it is subject to important noise given all biomedical research and clinical trials carried out within the district in the last 20 years. In consequence, we will use and ponderate data at the district level.  
+The study we propose is not a randomized one. Malaria elimination activities will be carried out in Magude and not in a randomized way (it is not possible to randomize a district based malaria elimination campaign). In order to identify the impact of malaria elimination activities on indicators of impact and in order to perform the general cost-effectiveness analyses, a comparator is needed. There is rich data existent in Manhi?a district, where CISM is located. However, it is subject to important noise given all biomedical research and clinical trials carried out within the district in the last 20 years. In consequence, we will use and ponderate data at the district level.  
 
 In the estimates we will also control for potential confounders, because good data are available. It is possible to control, for instance, for the demographic structure of people living in the districts, daily rainfall and temperature data, etc. Features of the health systems of all districts in the province are also known.
 
@@ -166,13 +273,39 @@ ELISA's ref. The base case costing scenario relied on the following set of assum
 were based on the cost, insurance and freight (cif.) price of the drug or diagnostic derived ......
 
 
-Elisa's ref. Probabilistic cost-effectiveness analysis was undertaken through Monte Carlo simulations using @Risk (version 5.0) add-in tool to Microsoft Excel (Palisade Corporation, Ithaca, NY, USA). The main factors affecting the cost-effectiveness of the intervention were identified in the estimated model by calculating Spearman's rank correlation coefficients as a measure of the magnitude of the association between each variable and the ICERs. A threshold analysis of the cost-effectiveness of IPTp-SP was performed to estimate cut-off points beyond which the
+Elisa's ref. Probabilistic cost-effectiveness analysis was undertaken through Monte Carlo simulations using @Risk (version 5.0) add-in tool to Microsoft Excel. (Palisade Corporation, Ithaca, NY, USA). The main factors affecting the cost-effectiveness of the intervention were identified in the estimated model by calculating Spearman's rank correlation coefficients as a measure of the magnitude of the association between each variable and the ICERs. A threshold analysis of the cost-effectiveness of IPTp-SP was performed to estimate cut-off points beyond which the
 prevention is no longer cost-effective. The threshold level of the ICERs used to define the intervention as cost-effective was 129 US$ per DALY averted, while 36 US$ per DALY averted was the threshold used to define the intervention as highly cost-effective. These threshold figures were based on previously accepted 1993 and 1996 World Bank definitions and inflated to their 2007 equivalent: 129 and 36 US$ for the year 2007 correspond to 100
 and 25 US$ for the year 1993, respectively [47-49]. The costeffective intervention threshold was conservatively set at 100 instead of 150 US$ per DALY averted. Probabilistic threshold analysis was performed on SP price, other intervention costs, case fatality rate, malaria incidence, protective efficacy and antenatal clinic attendance. Furthermore, a one-way sensitivity analysis was undertaken on SP price.
 
 ##Effectiveness
 
 All explanation on data from BES, its limitations and advantages compared to data from MALTEM's own surveillance system....... 
+
+```{r}
+# Plot the observed and counterfactual
+plot_data <- counter_factual %>%
+  group_by(date) %>%
+  summarise(cases = sum(cases),
+            cases_cf = sum(cases_cf),
+            cases_averted = sum(cases_averted)) %>%
+  gather(key, value, cases:cases_averted) %>%
+  filter(key != "cases_averted") %>%
+  mutate(key = ifelse(key == "cases", "MALTEM", "Counter-factual"))
+
+ggplot(data=plot_data,
+       aes(x=date,
+           y=value,
+           color=key))+
+  geom_line(size =2,
+            alpha = 0.6) +
+  labs(title="Observed malaria cases vs counterfactual",
+       subtitle="Post-MDA period, 2016",
+       x="Date",
+       y="Malaria cases") +
+  theme_minimal() +
+  scale_color_manual(name = "",
+values = c("red", "darkgreen"))
+```
 
 
 ##Cost effectiveness analysis
@@ -204,17 +337,6 @@ All explanation on data from BES, its limitations and advantages compared to dat
 
 ###Cost-effectiveness analysis
 
-
-
-#OTHERS
-
-Our results show that the effectiveness of MALTEM's interventions is as follows: 
-
-```{r}
-plot(x=costs$year , y=costs$`Case fatality rate`, type="l",
-     xlab="YEAR", ylab="rate", main="Case fatality rate ACROSS TIME",
-     col="blue")
-```
 
 And here is another figure.
 
