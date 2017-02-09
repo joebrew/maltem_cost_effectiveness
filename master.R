@@ -10,7 +10,7 @@ source('get_weather_data.R')
 # IRS data
 source('get_irs_data.R')
 
-# Join malaria cases with precipitation
+# Join malaria cases with precipitation and weather
 df <-
   left_join(x = df,
             y = precipitation_weekly,
@@ -193,3 +193,22 @@ write_csv(df, 'data/outputs/master.csv')
 #              alpha = 0.6) +
 #   labs(title = 'IRS coverage in Maputo province by district',
 #        subtitle = 'Number of people considered protected as % of total population')
+
+# # Plot malaria risk
+# ggplot(data = df,
+#        aes(x = date,
+#            y = malaria_risk)) +
+#   geom_line(alpha = 0.3) +
+#   facet_wrap(~district) +
+#   xlab('Date') +
+#   ylab('Malaria risk') +
+#   ggtitle('Estimated climatological risk of malaria',
+#           'By district') +
+#   geom_line(data = df %>%
+#               group_by(district) %>%
+#               mutate(p = p / max(p)) %>%
+#               ungroup,
+#             aes(x = date,
+#                 y = p),
+#             color = 'red',
+#             alpha = 0.5)

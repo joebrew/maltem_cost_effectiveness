@@ -2,16 +2,16 @@ library(tidyverse)
 library(readxl)
 
 # Read in modulo basico data
-mb <- read.csv('data/modulo_basico/Compiled_Dados Provincia Maputo.csv', skip = 2)
+# x <- read.csv('data/modulo_basico/Compiled_Dados Provincia Maputo.csv', skip = 2)
+mb <- read_excel('data/modulo_basico/Compiled_Dados Provincia Maputo.xlsx',
+                 skip = 2)
 
 # Clean it up ----------
 
 # clean up column names
 names(mb)[1:3] <- c('year', 'district', 'age')
-names(mb)[4:ncol(mb)] <-
-  gsub('X',
-       'week_',
-       names(mb)[4:ncol(mb)])
+names(mb)[4:ncol(mb)] <- paste0('week_', names(mb)[4:ncol(mb)])
+
 
 # interpolate year
 for (i in 1:nrow(mb)){
@@ -255,6 +255,9 @@ df <-
 df$month <- as.numeric(format(df$date, '%m'))
 df$day <- as.numeric(format(df$date, '%d'))
 
+# Keep only through end of 2016
+df <- df %>%
+  filter(date <= '2016-12-31')
 
 # Write data
 write_csv(df, 'data/outputs/cases.csv')
