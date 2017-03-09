@@ -46,10 +46,12 @@ bes <-
   bes %>%
   mutate(mda=ifelse(date<"2015-11-08", "pre_mda", 
                     ifelse(date<"2016-02-04", "mda", "post_mda")),
-         intervention=district=="MAGUDE")
+         intervention=district=="MAGUDE",
+         magude = ifelse(district == 'MAGUDE', 'Magude', 'Not Magude'))
+
 
 # Create model to estimate effectiveness
-mod <-lm(p ~ mda*intervention + irs_coverage + age, data=bes, weights = population)
+mod <-lm(pk ~ mda*intervention + irs_coverage, data=bes, weights = population)
 ```
 
 Model parameters
@@ -67,7 +69,7 @@ counter_factual <-
    bes %>% filter(year == 2016, 
                   district == "MAGUDE")
 results <- list()
-for (i in 2016:2025){
+for (i in 2010:2020){
   new_year <- counter_factual %>%
     mutate(year = i) 
   results[[i]] <- new_year
@@ -282,6 +284,34 @@ and 25 US$ for the year 1993, respectively [47-49]. The costeffective interventi
 All explanation on data from BES, its limitations and advantages compared to data from MALTEM's own surveillance system....... 
 
 ```{r}
+x <- counter_factual
+x$predicted <- predict(mod, x)
+long <- gather(x, key, value, cases:predicted)
+long$value <- as.numeric(long$value)
+long <- long %>%
+  mutate(value = ifelse(key == 'pk', NA, value))
+
+y <- bes
+long2 <- gather(y, key, value, cases:predicted)
+long2$value <- as.numeric(long2$value)
+
+z <- rbind(long %>%
+             filter(year >= 2017),
+           long2 %>%
+             filter(year <= 2016))
+
+ggplot(data = z %>%
+         filter(key %in% c('predicted', 'pk'),
+                district == 'MAGUDE'),
+       aes(x = date,
+           y = value,
+           group = key,
+           color = key)) +
+  geom_line() +
+  facet_wrap(~age)
+```
+
+```{r}
 # Plot the observed and counterfactual
 plot_data <- counter_factual %>%
   group_by(date) %>%
@@ -355,4 +385,118 @@ ggplot(data = bes,
                      values = c('darkgreen', 'darkorange'))
 ```
 
+
+```{r}
+x <- bes %>%
+    filter(district != 'NAMAACHA') %>%
+  # filter(district != 'MANHICA') %>%
+  group_by(date,
+           # year, month,
+           # age, 
+           magude) %>%
+  summarise(#pk = weighted.mean(pk, w = population),
+            cases = sum(cases),
+            pop = sum(population),
+            precip = mean(precip)) %>%
+  ungroup %>%
+  mutate(p = cases / pop * 1000) #%>%
+  # mutate(date = as.Date(paste0(year, '-',
+  #                              '06',
+  #                              # month, 
+  #                              '-01')))# %>%
+  # filter(date >= '2014-07-01')
+
+library(ggthemes)
+library(cism)
+ggplot(data = x,
+       aes(x = date,
+           color = magude,
+           y = p)) +
+  geom_line(alpha = 0.6) +
+  # geom_smooth() +
+  # facet_wrap(~age, ncol = 1) +
+  # theme_bw()  +
+  scale_color_manual(name = '',
+                     values = c('blue', 'red')) +
+  # theme_fivethirtyeight() +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-12-31'))),
+             lty = 2, alpha = 0.2) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0('2015-03-15'))),
+             color = 'darkgreen') +
+  labs(x = 'Week',
+       y = 'Weekly incidence per 1,000',
+       title = 'Weekly clinical malaria',
+       subtitle = 'Province of Maputo, all ages, weekly') +
+  geom_label(data = data_frame(x = as.Date(paste0('2015-03-15')),
+                               y = 15,
+                               label = 'MDA'),
+             aes(x = x,
+                 y = y,
+                 label = label),
+             color = 'black') +
+  theme_cism()
+```
 # Discussion
+
+```{r}
+bes <- bes %>% filter(district != 'NAMAACHA')
+# Prediction
+bes$predicted <- predict(mod, bes)
+
+x <- bes %>%
+    filter(district != 'NAMAACHA') %>%
+  # filter(district != 'MANHICA') %>%
+  group_by(date,
+           # year, month,
+           # age, 
+           magude) %>%
+  summarise(#pk = weighted.mean(pk, w = population),
+            cases = sum(cases),
+            pop = sum(population),
+            precip = mean(precip),
+            precip_risk = mean(precipitation_risk),
+            predicted = mean(predicted)) %>%
+  ungroup %>%
+  mutate(p = cases / pop * 1000)
+#%>%
+  # mutate(date = as.Date(paste0(year, '-',
+  #                              '06',
+  #                              # month, 
+  #                              '-01')))# %>%
+  # filter(date >= '2014-07-01')
+
+library(ggthemes)
+ggplot(data = x,
+       aes(x = date,
+           color = magude,
+           y = predicted)) +
+  geom_line(alpha = 0.6) +
+  # geom_smooth() +
+  # facet_wrap(~age, ncol = 1) +
+  # theme_bw()  +
+  scale_color_manual(name = '',
+                     values = c('blue', 'red')) +
+  theme_fivethirtyeight() +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-12-31'))),
+             lty = 2, alpha = 0.6) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0('2015-03-15')))) +
+  geom_line(data = x,
+            aes(x = date,
+                y = p,
+                color = magude),
+                lty = 2,
+            alpha = 0.5)
+
+```
+
+```{r}
+# Precipitation
+x <- bes %>%
+  group_by(year, month) %>%
+  summarise(p = mean(precipitation)) %>%
+  mutate(date = as.Date(paste0(year, '-', month, '-01')))
+ggplot(data = x,
+       aes(x = date,
+           y = p)) +
+  geom_bar(stat = 'identity') 
+```

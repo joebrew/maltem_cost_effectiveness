@@ -21,10 +21,18 @@ map <- moz1
 map <- map[map@data$NAME_1 == 'Maputo',]
 map_fortified <- broom::tidy(map, region = 'NAME_1')
 
+map2 <- moz2
+map2 <- map2[map2@data$NAME_1 == 'Maputo',]
+map2_fortified <- broom::tidy(map2, region = 'NAME_2')
 
 # Define function for risk map
 risk_map <- function(data,
                      map = map){
+  
+  # Jitter the data
+  data <- data %>%
+    mutate(lng = jitter(lng, factor = 50),
+           lat = jitter(lat, factor = 50))
   
   # Group by location and get overall
   grouped <- data %>%
@@ -89,9 +97,9 @@ risk_map <- function(data,
     geom_tile(aes(fill=pred),color=NA) +
     # stat_contour(aes(z=pred), bins=nbin, color="#999999") +
     scale_fill_gradient2(name = 'Hotspot\nindex',
-                         midpoint=mean(interp_data$pred),
-                         # limits = c(-1,5),
-                         # midpoint = 2,
+                         # midpoint=mean(interp_data$pred),
+                         limits = c(-1,7),
+                         midpoint = 2,
                          low="white",
                          mid="yellow",
                          high="red") +
@@ -134,12 +142,32 @@ for (i in 1:length(dates)){
     filter(date == dates[i])
   r <- risk_map(data = data,
                 map = map) +
-    labs(title = dates[i])
+    labs(title = format(dates[i], '%B %d, %Y')) +
+    geom_polygon(data = map2_fortified,
+                 aes(x = long,
+                     y = lat,
+                     group = group),
+                 color = 'black',
+                 fill = NA)
   r
   ggsave(paste0('risk_map_animation/', dates[i], '.png'))
   # assign(paste0('g', i),
          # r)
 }
+
+# Static map
+data <- df %>%
+  filter(date >= '2016-12-15')
+r <- risk_map(data = data,
+              map = map) +
+  labs(title = 'December 2016') +
+  geom_polygon(data = map2_fortified,
+               aes(x = long,
+                   y = lat,
+                   group = group),
+               color = 'black',
+               fill = NA)
+r
 # ggplot_list <- Filter(function(x) is(x, "ggplot"), mget(ls()))
 
 # Run command line: convert -delay 10 -loop 0 *.png result.gif

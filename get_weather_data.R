@@ -348,7 +348,8 @@ if(file.exists("weather_data/aggregated/precipitation_daily.csv") &
     precipitation_weekly <- 
       precipitation_daily %>%
       group_by(year, week, district) %>%
-      summarise(precipitation = sum(precipitation, na.rm = TRUE),
+      summarise(date = first(date),
+                precipitation = sum(precipitation, na.rm = TRUE),
                 precipitation_risk = length(which(precipitation_risk)) / n(),
                 avg_temp_max = mean(temp_max, na.rm = TRUE),
                 max_temp = max(temp_max, na.rm = TRUE),
