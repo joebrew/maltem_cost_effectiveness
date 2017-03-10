@@ -10,6 +10,11 @@ source('get_weather_data.R')
 # IRS data
 source('get_irs_data.R')
 
+df <-		
+  left_join(x = df,		
+            y = weather,		
+            by = c('district', 'date'))
+
 # Join with IRS
 df <- 
   left_join(x = df,

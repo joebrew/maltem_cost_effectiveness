@@ -372,7 +372,7 @@ And here is another figure.
 
 ```{r, fig.height = 8}
 
-ggplot(data = bes,
+ggplot(data = df,
        aes(x = date,
            y = pk)) +
   geom_line(aes(color = age)) +
@@ -387,7 +387,8 @@ ggplot(data = bes,
 
 
 ```{r}
-x <- bes %>%
+x <- df %>%
+  mutate(magude = ifelse(district == 'MAGUDE', 'Magude', 'Not Magude')) %>%
     filter(district != 'NAMAACHA') %>%
   # filter(district != 'MANHICA') %>%
   group_by(date,

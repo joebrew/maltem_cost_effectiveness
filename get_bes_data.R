@@ -1,6 +1,9 @@
 library(tidyverse)
 library(readxl)
 
+# Source helpers
+source('helpers.R')
+
 # Read in modulo basico data
 # x <- read.csv('data/modulo_basico/Compiled_Dados Provincia Maputo.csv', skip = 2)
 mb <- read_excel('data/modulo_basico/Compiled_Dados Provincia Maputo.xlsx',
@@ -259,12 +262,23 @@ df$day <- as.numeric(format(df$date, '%d'))
 df <- df %>%
   filter(date <= '2016-12-31')
 
+# Get a date helper for standardizing weekly dates to saturday
+date_helper <- create_date_helper()
+
+df <- df %>% ungroup
+
+df <- df %>%
+  dplyr::select(-date) %>%
+  left_join(date_helper,
+            by = c('year', 'week'))
+
 # Write data
 write_csv(df, 'data/outputs/cases.csv')
 
 # Remove unecessary objects
-rm(d2, mb, pop,
-   final_list, i, sh,
+rm(d2, date_helper, mb, pop,
+   final_list, i, sh, counter,
+   this_dow,
    read_population)
 
 # # See incidence
