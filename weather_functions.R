@@ -23,16 +23,6 @@ rfPred <- function(model_data,
   test_acc <- list()
   test_stats  <- list()
   
-  
-  # Remove some useless variables
-  model_data <-
-    model_data %>%
-    dplyr::select(-year, -month,
-                  -week, -day,
-                  -p, -pk,
-                  -x, -y,
-                  -lng, -lat)
-  
   # remove all rows with NAs - you can also impute
   model_data <- model_data[complete.cases(model_data),]
   
@@ -129,10 +119,12 @@ enetPred <- function(model_data,
   factor_index <- sapply(model_data,is.factor)
   
   # loop through data and change factors to numeric (for some reason apply wasn't working for me!)
-  for (col in 1:length(which(factor_index))) {
-    fac_dat <- model_data[, factor_index]
-    fac_dat[, col] <- as.numeric(fac_dat[, col])
-    model_data[, factor_index] <- fac_dat
+  if(length(which(factor_index)) > 0){
+    for (col in 1:length(which(factor_index))) {
+      fac_dat <- model_data[, factor_index]
+      fac_dat[, col] <- as.numeric(fac_dat[, col])
+      model_data[, factor_index] <- fac_dat
+    }
   }
   
   ## get features - remove outcome and date (because it has too many factor levels for the models)

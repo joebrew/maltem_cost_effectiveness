@@ -67,10 +67,52 @@ if('mozambican_weather.csv' %in% dir('noaa_data')){
                        noaa[,j])
   }
   
+  # Convert to number
+  convert_to_number <-
+    function(x){
+      x <- regmatches(x, gregexpr("[[:digit:]]+", x))
+      if(length(unlist(x)) == 0){
+        y <- NA
+      } else {
+        y <- lapply(x, function(z){
+          if(length(z) == 2){
+            out <- as.numeric(paste0(z[1], '.', z[2]))
+          } else {
+            out <- unlist(z)[1]
+          }
+          return(out)
+        })
+      }
+      return(as.numeric(unlist(y)))
+    }
+  
+    
+  # Clean up column types
+  noaa <-
+    noaa %>%
+    mutate(max = convert_to_number(`max`),
+           min = convert_to_number(`min`),
+           prcp = convert_to_number(prcp))
+  
   # Interpolate for our locations
-  coords <- read_csv('public_data/coordinates_of_maputo_districts.csv')
+  library(sp)
+  x <- cism::moz2
+  x <- x[x@data$NAME_1 %in% c('Maputo', 'Gaza'),]
+  coords <- data.frame(coordinates(x))
+  names(coords) <- c('x', 'y')
+  coords$district <- x@data$NAME_2
+  
+  # Standardize names
+  coords$district <- toupper(coords$district)
+  coords$district[coords$district == 'CHÓKWÈ'] <- 'CHOKWE'
+  coords$district[coords$district == 'GUIJÁ'] <- 'GUIJA'
+  coords$district[coords$district == 'XAI-XAI'] <- 'XAI-XAI DISTRICT'
+  coords$district[coords$district == 'MANHIÇA'] <- 'MANHICA'
+  coords$district[coords$district == 'MATUTUÍNE'] <- 'MATUTUINE'
+  # coords <- read_csv('public_data/coordinates_of_maputo_districts.csv')
   
   # For each location, get weather
+  source('helpers.R')
   results <- list()
   for (i in 1:nrow(coords)){
     this_district <- coords$district[i]
@@ -132,6 +174,9 @@ weather_weekly <-
   
 rm(date_helper)
 
+# Write a csv
+write_csv(weather_weekly, 'data/outputs/weather_weekly.csv')
+write_csv(weather, 'data/outputs/weather_daily.csv')
 # library(scales)
 # library(ggthemes)
 # ggplot(data = weather %>% 

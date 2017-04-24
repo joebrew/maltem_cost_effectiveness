@@ -4,221 +4,474 @@ library(readxl)
 # Source helpers
 source('helpers.R')
 
-# Read in modulo basico data
-# x <- read.csv('data/modulo_basico/Compiled_Dados Provincia Maputo.csv', skip = 2)
-mb <- read_excel('data/modulo_basico/Compiled_Dados Provincia Maputo.xlsx',
-                 skip = 2)
+# Define which files we have
+gaza_dir <- 'data/surveillance_ministry/BES_Gaza/modulo_basico/'
+mb_files_gaza <- dir(gaza_dir,
+                all.files = TRUE,
+                recursive = TRUE,
+                include.dirs = TRUE,
+                pattern = '.xlsx')
+maputo_dir <- 'data/surveillance_ministry/BES_Maputo/Modulo Básico/'
+mb_files_maputo <- dir(maputo_dir,
+                     all.files = TRUE,
+                     recursive = TRUE,
+                     include.dirs = TRUE,
+                     pattern = '.xlsx')
+mb_files <- c(mb_files_gaza,
+              mb_files_maputo)
 
-# Clean it up ----------
-
-# clean up column names
-names(mb)[1:3] <- c('year', 'district', 'age')
-names(mb)[4:ncol(mb)] <- paste0('week_', names(mb)[4:ncol(mb)])
-
-
-# interpolate year
-for (i in 1:nrow(mb)){
-  mb$year[i] <-
-    ifelse(is.na(mb$year[i]),
-           mb$year[i-1],
-           mb$year[i])
+# Go through each file and combine
+mb_list <- list()
+for(i in 1:length(mb_files)){
+  message(i)
+  # Specify the file path
+  this_file <- mb_files[i]
+  # Specify the year
+  this_year <-  regmatches(this_file, gregexpr("[[:digit:]]+", this_file))
+  this_year <- as.numeric(unlist(this_year))
+  # Specify the district
+  this_district <- gsub('[[:digit:]]+', 
+                        '',
+                        this_file)
+  this_district <- gsub('/|.xlsx| ',
+                        '',
+                        this_district)
+  # Specify the province
+  this_province <-
+    ifelse(this_file %in% mb_files_gaza,
+           'Gaza',
+           'Maputo')
+  # Read in the data
+  this_file_path <- 
+    paste0(
+      ifelse(this_province == 'Gaza',
+             gaza_dir,
+             maputo_dir),
+      this_file)
+  these_data <- 
+    read_excel(this_file_path,
+               skip = 5)
+  # Keep only those columns referring to malaria or diarrhea
+  good_columns <- which(grepl('mal|diarr', tolower(these_data[1,])))
+  good_columns <- sort(c(1,
+                         good_columns,
+                         good_columns + 2))
+  these_data <- these_data[,good_columns]
+  # Remove those rows not associated with a week
+  names(these_data)[1] <- 'week'
+  names(these_data)[2:ncol(these_data)] <-
+    these_data[1,2:ncol(these_data)]
+  for(j in 2:ncol(these_data)){
+    if(is.na(names(these_data)[j])){
+      names(these_data)[j] <-
+        names(these_data)[j - 1]
+    }
+  }
+  # Add the age to the names
+  names(these_data)[2:ncol(these_data)] <-
+    paste0(names(these_data)[2:ncol(these_data)],
+           '_',
+           these_data[2,2:ncol(these_data)])
+  
+  # Keep only weekly observations
+  these_data <-
+    these_data %>%
+    filter(grepl('Semana ', week))
+  
+  # Make long
+  these_data <-
+    these_data %>%
+    gather(key,
+           value,
+           `MALÁRIA_0-4 anos`:`DIARREIA_5-14 anos +`)
+  
+  # Create an age_group column
+  these_data$age_group <-
+    unlist(lapply(strsplit(these_data$key, '_'), function(x){x[2]}))
+  
+  # Create a disease column
+  these_data$disease <- 
+    unlist(lapply(strsplit(these_data$key, '_'), function(x){x[1]}))
+    
+  # Remove accents:
+  these_data$disease <- 
+    stringi::stri_trans_general(these_data$disease, "Latin-ASCII")
+  
+  # Add year, province, and district columns
+  these_data$year <- this_year
+  these_data$province <- this_province
+  these_data$district <- this_district
+  
+  # Keep only variables of interest
+  these_data <- 
+    these_data %>%
+    dplyr::select(year, 
+                  week, 
+                  province,
+                  district,
+                  disease,
+                  age_group,
+                  value)
+  
+  # Remove those with no age group
+  these_data <- 
+    these_data %>%
+    filter(!is.na(age_group) | age_group == 'NA')
+  
+  # Recode age group
+  these_data$age_group <-
+    ifelse(grepl('0-4', these_data$age_group), '0-4',
+           '5+')
+  
+  # Add results to the list
+  mb_list[[i]] <- these_data
 }
 
-# make long
-mb <- gather(mb,
-             key,
+# Combine all data
+mb <- bind_rows(mb_list)
+
+# Fix value
+mb$value <- as.numeric(as.character(mb$value))
+
+# Recode week
+mb$week <- 
+  as.numeric(unlist(lapply(strsplit(mb$week, ' |/'), function(x){x[2]})))
+
+#######- SISMA
+# Define which files we have
+gaza_dir <- 'data/surveillance_ministry/BES_Gaza/SIS-MA/'
+sm_files_gaza <- dir(gaza_dir,
+                     all.files = TRUE,
+                     recursive = TRUE,
+                     include.dirs = TRUE,
+                     pattern = '.xls')
+maputo_dir <- 'data/surveillance_ministry/BES_Maputo/SIS-MA 2016_2017/'
+sm_files_maputo <- dir(maputo_dir,
+                       all.files = TRUE,
+                       recursive = TRUE,
+                       include.dirs = TRUE,
+                       pattern = '.xls')
+sm_files <- c(sm_files_gaza,
+              sm_files_maputo)
+
+# Go through each file and cosmine
+sm_list <- list()
+for(i in 1:length(sm_files)){
+  message(i)
+  # Specify the file path
+  this_file <- sm_files[i]
+  
+  # Specify the province
+  this_province <-
+    ifelse(this_file %in% sm_files_gaza,
+           'Gaza',
+           'Maputo')
+  
+  # If gaza, read in the gaza format
+  if(this_file == 'BES_GAZA_2014_2016.xlsx'){
+    # Read in the data
+    this_file_path <- 
+      paste0(
+        ifelse(this_province == 'Gaza',
+               gaza_dir,
+               maputo_dir),
+        this_file)
+    these_data <- 
+      read_excel(this_file_path,
+                 skip = ifelse(this_file == "SIS-MA_2016-17.xls",
+                               1,
+                               0))
+    
+    # Rename columns to get in the same format as mb data
+    these_data <-
+      these_data %>%
+      rename(year = Ano,
+             week = Semana,
+             district = Distrito,
+             province = Provincia,
+             district = Distrito,
+             value = `Positive cases`) %>%
+      dplyr::select(-value)
+    
+    # Make long
+    these_data <-
+      these_data %>%
+      gather(age_group,
              value,
-             week_1:week_53)
+             `0 to 4`:`5 or more`) %>%
+      mutate(age_group = ifelse(age_group == '0 to 4',
+                                '0-4',
+                                '5+'))
+    
+    # Specify that this is malaria
+    these_data <-
+      these_data %>%
+      mutate(disease = 'MALARIA')
+    
+    
+    # Keep only variables of interest
+    these_data <- 
+      these_data %>%
+      dplyr::select(year, 
+                    week, 
+                    province,
+                    district,
+                    disease,
+                    age_group,
+                    value)
+  } else {
+    # Read in the maputo format
+    # Read in the data
+    this_file_path <- 
+      paste0(
+        ifelse(this_province == 'Gaza',
+               gaza_dir,
+               maputo_dir),
+        this_file)
+    these_data <- 
+      read_excel(this_file_path,
+                 skip = 1)
+    
+    these_data$province <- 'Maputo'
+    
+    if(this_file == "SIS-MA_2016-17.xls"){
+      these_data <-
+        these_data %>%
+        rename(Period = Semana,
+               `Organisation unit` = `DISTRITO DE XAI-XAI`)
+    }
+    
+    # Get year and week out of period
+    these_data$year <- as.numeric(substr(these_data$Period, 1, 4))
+    these_data$week <- as.numeric(substr(these_data$Period, 6, nchar(these_data$Period)))
+    
+    # Rename columns to get in the same format as mb data
+    these_data <-
+      these_data %>%
+      rename(district = `Organisation unit`,
+             `0-4` = `BES - MALÁRIA 0-4 anos, CASOS`,
+             `5+` = `BES - MALÁRIA 5+ anos, CASOS`) 
+    
+    # Make long
+    these_data <-
+      these_data %>%
+      gather(age_group,
+             value,
+             `0-4`:`5+`) 
+    
+    # Specify that this is malaria
+    these_data <-
+      these_data %>%
+      mutate(disease = 'MALARIA')
+    
+    # Remove accents from district
+    these_data$district <- 
+      stringi::stri_trans_general(these_data$district, "Latin-ASCII")
+    
+    # Keep only variables of interest
+    these_data <- 
+      these_data %>%
+      dplyr::select(year, 
+                    week, 
+                    province,
+                    district,
+                    disease,
+                    age_group,
+                    value)
+  }
+  
+  # Add results to the list
+  sm_list[[i]] <- these_data
+}
 
-# Clean up week
-names(mb)[names(mb) == 'key'] <- 'week'
-mb$week <- as.numeric(gsub('week_', '', mb$week))
+# Cosmine all data
+sm <- bind_rows(sm_list)
 
-# Remove duplicates
-mb <- mb[!duplicated(mb[,c('year', 'district', 'age', 'week')]),]
+# Standardize district names before combining sm and mb
+mb$district <- toupper(mb$district)
 
-# Read in the sis-ma data ---------
-d2016 <- read_excel('data/dhes2/BES de 2016 SIS-MA.xls', skip = 1)
-d2017 <- read_excel('data/dhes2/BES de 2017 SIS-MA.xls', skip = 1)
-d2 <- bind_rows(d2016, d2017)
-rm(d2016, d2017)
+# all_districts <- sort(unique(c(mb$district,
+#                              sm$district)))
+# Write a csv, create the re-coding, then
+# read it back in
+# write_csv(data_frame(district = all_districts,
+#                      new_district = NA),
+#           'data/surveillance_ministry/district_names_matcher.csv')
+district_matcher <-
+  read_csv('data/surveillance_ministry/district_names_matcher.csv')
 
-# Fix column names
-names(d2) <- c('period',
-               'district',
-               'age_0_4',
-               'age_5_plus')
+# Apply the new districts
+mb <-
+  mb %>%
+  left_join(district_matcher,
+            by = 'district') %>%
+  mutate(district = new_district) %>%
+  dplyr::select(-new_district)
+sm <-
+  sm %>%
+  left_join(district_matcher,
+            by = 'district') %>%
+  mutate(district = new_district) %>%
+  dplyr::select(-new_district)
 
-# Generate more columns
-d2$year <- as.numeric(substr(d2$period, 1, 4))
-d2$week <- as.numeric(substr(d2$period, 6, nchar(d2$period)))
-
-# Make long
-d2 <- gather(d2,
-             key, value, age_0_4:age_5_plus)
-
-# Fix names
-names(d2)[names(d2) == 'key'] <- 'age'
-d2$age <- ifelse(d2$age == 'age_0_4', '0-4 anos',
-                 ifelse(d2$age == 'age_5_plus', '5 anos +',
-                        NA))
-
-d2 <- d2[,names(mb)]
-
-
-# Specify sources
-d2$src <- 'SIS-MA'
+# Specify the source before combining
 mb$src <- 'MB'
+sm$src <- 'SM'
 
-# Combine data
-df <- bind_rows(d2, mb)
+# Combine
+bes <- bind_rows(mb,
+                 sm)
 
-# Make uppercase district
-df$district <- toupper(df$district)
+# Keep only malaria
+bes <- 
+  bes %>%
+  filter(disease == 'MALARIA')
 
-# Standardize district names
-df$district[df$district == 'MANHIÇA'] <- 'MANHICA'
-df$district[df$district == 'MATUTUÌNE'] <- 'MATUTUINE'
+# See if there are disagreements by src
+x = bes %>%
+  group_by(year, week, province, district, age_group) %>%
+  summarise(n = n(),
+            min_value = min(value),
+            max_value = max(value)) %>%
+  ungroup %>%
+  mutate(difference = max_value - min_value) 
 
-# When two different data sources, use the average
-df <- df %>%
-  group_by(year, district, age, week) %>%
-  summarise(value = mean(value, na.rm = TRUE))
-
-# Get a "date" column (approximate)
-df$date <- as.Date(paste0(df$year, '-01-01')) + (7 * (df$week -1))
-
-df <- df
-df$cases <- df$value
-
-
-# # Get the overlap period
-# df <- df %>%
-#   left_join(
-#     df %>%
-#       group_by(year, district, age, week) %>%
-#       summarise(overlap = length(unique(src)) > 1),
-#     by = c("year", "district", "age", "week")
-#   )
-# 
-# # Arrange by date
-# df <- df %>%
-#   arrange(year, week)
-# 
-
-# # Remove the 0 cases in 2016 or 2017 (these are when systems were not yet
-# # or were no longer operational)
-# df <- df %>%
-#   mutate(flag = year %in% 2016:2017 &
-#            (value == 0 | is.na(value))) %>%
-#   filter(!flag) %>%
-#   dplyr::select(-flag)
-# 
-# # Get a scaling factor for adjusting dhes cases to MB
-# scale_data <- df %>%
-#            filter(overlap) %>%
-#            group_by(date, district, src) %>%
-#            summarise(value = sum(value, na.rm = TRUE)) %>%
-#   # group by place and see
-#   group_by(district) %>%
-#   summarise(d_over_m = sum(value[src == 'SIS-MA'], na.rm = TRUE) / 
-#               sum(value[src == 'MB'], na.rm = TRUE))
-# 
-# # Manually add in NAMAACHA
-# scale_data <-
-#   bind_rows(scale_data,
-#             data_frame(district = 'NAMAACHA',
-#                        d_over_m = 1))
-# 
-# # Get an id column
-# df$id <- paste0(df$year,
-#                 df$week,
-#                 df$district,
-#                 df$age)
-# # Get adjusted cases using the scaling factor
-# top <- df %>%
-#   filter(src == 'MB') %>%
-#   mutate(cases = value)
-# bottom <- df %>%
-#   filter(src == 'SIS-MA') %>%
-#   mutate(src = 'SIS-MA adjusted') %>%
-#   left_join(scale_data,
-#             by = 'district') %>%
-#   mutate(cases = value / d_over_m) %>%
-#   dplyr::select(-d_over_m) %>%
-#   filter(!id %in% unique(top$id))
-# df <-
-#   bind_rows(top,
-#             bottom) %>%
-#   dplyr::select(-id, -overlap)
-
-# Reorder columns
-df <-
-  df %>%
-  dplyr::select(date,
-                year,
-                week,
-                district,
-                age,
-                # value, # no longer need this
-                cases)
-
-
+# There are. So we average
+bes <- bes %>%
+  group_by(year, week, province, district, age_group) %>%
+  summarise(has_mb = length(which(src == 'MB')) == 1,
+            has_sm = length(which(src == 'SM')) == 1,
+            cases = round(mean(value,
+                         na.rm = TRUE))) %>%
+  ungroup %>%
+  filter(!is.na(year),
+         !is.na(week),
+         !is.na(province),
+         !is.na(district),
+         !is.na(age_group)) %>%
+  mutate(cases = ifelse(is.na(cases), 0, cases)) 
 
 # Read in population data
-read_population <- function(sheet = 1){
-  x  <- read_excel('data/Projeccoes_distritais_2007_20240/Província  Maputo - - Distritos.xls', skip = 0,sheet = sheet)
+read_population <- function(sheet = 1,
+                            file = 'data/Projeccoes_distritais_2007_20240/Província  Maputo - - Distritos.xls'){
   
-  # Get year
-  # the_year <- as.numeric(substr(names(x)[1], nchar(names(x)[1]) - 3, nchar(names(x)[1])))
-  the_year <- sheet + 2006
+  # Define which district
+  if(grepl('Gaza', file)){
+    gaza <- TRUE
+  } else {
+    gaza <- FALSE
+  }
   
-  # Get where each district starts
-  district_starts <- which(apply(x[,1], 1, function(y){grepl('Quadro', y)}))
-  # Manually add in the first one
-  district_starts <- c(0, district_starts)
-  
-  # Get the actual districts
-  districts <- c(names(x)[1],
-                 x[district_starts,1] %>% unlist)
-  districts <- as.character(districts)
-  temp <- unlist(lapply(strsplit(districts, ' de '), function(x){x[3]}))
-  districts <-
-    toupper(substr(temp, 1, nchar(temp) -6))
-  # Read each district
-  results_list <- list()
-  for (j in 1:length(district_starts)){
-    this_district  <- read_excel('data/Projeccoes_distritais_2007_20240/Província  Maputo - - Distritos.xls', 
-                                 skip = district_starts[j] + 2,
-                                 sheet = 1)[,1:2]
-    # Remove total lines
-    this_district <- this_district[3:nrow(this_district),]
-    # Remove other districts
-    this_district <- this_district[1:18,]
-    # Make age groups
-    this_district$age_group <- NA
-    this_district$age_group[1:2] <- '0-4 anos'
-    this_district$age_group[3:nrow(this_district)] <- '5 anos +'
+  if(gaza){
+    # Gaza province - ------------------------------------
+    
+    x  <- read_excel(file, skip = 0,sheet = sheet)
+    
+    # Get year
+    # the_year <- as.numeric(substr(names(x)[1], nchar(names(x)[1]) - 3, nchar(names(x)[1])))
+    the_year <- sheet + 2006
+    
+    # Get where each district starts
+    district_starts <- which(apply(x[,1], 1, function(y){grepl('Quadro', y)}))
+    # Manually add in the first one
+    district_starts <- c(0, district_starts)
+    
+    # Get the actual districts
+    districts <- c(names(x)[1],
+                   x[district_starts,1] %>% unlist)
+    districts <- as.character(districts)
+    temp <- unlist(lapply(strsplit(districts, ' de '), function(x){x[3]}))
+    districts <-
+      toupper(substr(temp, 1, nchar(temp) -6))
+    # Read each district
+    results_list <- list()
+    for (j in 1:length(district_starts)){
+      this_district  <- read_excel(file, 
+                                   skip = district_starts[j] + 2,
+                                   sheet = 1)[,1:2]
+      # Remove total lines
+      this_district <- this_district[3:nrow(this_district),]
+      # Remove other districts
+      this_district <- this_district[1:18,]
+      # Make age groups
+      this_district$age_group <- NA
+      this_district$age_group[1:2] <- '0-4'
+      this_district$age_group[3:nrow(this_district)] <- '5+'
+      # Group and agg
+      this_district <-
+        this_district %>%
+        group_by(age_group) %>%
+        summarise(population = sum(as.numeric(as.character(Total)))) %>%
+        ungroup
+      
+      # Add a year column
+      this_district$year <- the_year
+      
+      # Add a district column
+      this_district$district <- districts[j]
+      
+      # Add to results list
+      results_list[[j]] <- this_district
+    }
+    results <- bind_rows(results_list)
+    return(results)
+  } else {
+    # Maputo province - ------------------------------------
+    
+    x  <- read_excel(file, skip = 0,sheet = sheet)
+    
+    # Get year
+    # the_year <- as.numeric(substr(names(x)[1], nchar(names(x)[1]) - 3, nchar(names(x)[1])))
+    the_year <- sheet + 2006
+    
+    # Get where each district starts
+    district_starts <- which(apply(x[,1], 1, function(y){grepl('Quadro', y)}))
+    # Manually add in the first one
+    district_starts <- c(0, district_starts)
+    
+    # Get the actual districts
+    districts <- c(names(x)[1],
+                   x[district_starts,1] %>% unlist)
+    districts <- as.character(districts)
+    temp <- unlist(lapply(strsplit(districts, ' de '), function(x){x[3]}))
+    districts <-
+      toupper(substr(temp, 1, nchar(temp) -6))
+    # Read each district
+    results_list <- list()
+    for (j in 1:length(district_starts)){
+      this_district  <- read_excel(file, 
+                                   skip = district_starts[j] + 2,
+                                   sheet = 1)[,1:2]
+      # Remove total lines
+      this_district <- this_district[3:nrow(this_district),]
+      # Remove other districts
+      this_district <- this_district[1:18,]
+      # Make age groups
+      this_district$age_group <- NA
+      this_district$age_group[1:2] <- '0-4'
+      this_district$age_group[3:nrow(this_district)] <- '5+'
       # ifelse(this_district$Idade %in% c('0', '1-4'),
       #        '0-4 anos',
       #        '5 anos +')
-    # Group and agg
-    this_district <-
-      this_district %>%
-      group_by(age_group) %>%
-      summarise(population = sum(as.numeric(as.character(Total))))
-    
-    # Add a year column
-    this_district$year <- the_year
-    
-    # Add a district column
-    this_district$district <- districts[j]
-    
-    # Add to results list
-    results_list[[j]] <- this_district
+      # Group and agg
+      this_district <-
+        this_district %>%
+        group_by(age_group) %>%
+        summarise(population = sum(as.numeric(as.character(Total)))) %>%
+        ungroup 
+      
+      # Add a year column
+      this_district$year <- the_year
+      
+      # Add a district column
+      this_district$district <- districts[j]
+      
+      # Add to results list
+      results_list[[j]] <- this_district
+    }
+    results <- bind_rows(results_list)
+    return(results)
   }
-  results <- bind_rows(results_list)
-  return(results)
 }
 
 final_list <- list()
@@ -226,27 +479,70 @@ for (sh in 1:12){
   message(sh)
   final_list[[sh]] <- read_population(sheet = sh)
 }
-pop <- bind_rows(final_list)
+pop_maputo <- bind_rows(final_list)
+pop_maputo$province <- 'Maputo'
+
+# Read for Gaza too
+final_list <- list()
+for (sh in 1:12){
+  message(sh)
+  final_list[[sh]] <- read_population(sheet = sh,
+                                      file = 'data/Projeccoes_distritais_2007_20240/Gaza - Distritos.xls')
+}
+pop_gaza <- bind_rows(final_list) %>% filter(district != 'GAZA')
+pop_gaza$province <- 'Gaza'
+
+# Combine all populations
+pop <- bind_rows(pop_maputo, pop_gaza)
 
 # Get pop only for our years of interest
 # (there's a bug in 2026 anyway)
 pop <- pop %>% filter(year >= 2010 &
                         year <= 2017)
 
-# Standardizenames
-pop <- pop %>%
-  rename(age = age_group)
-
-# Fix encoding
+# Standardize district names
+pop$district[pop$district == 'BILENE MACIA'] <- 'BILENE'
+pop$district[pop$district == 'MANDLACAZE'] <- 'MANDLAKAZI'
 pop$district[pop$district == 'MANHIÇA'] <- 'MANHICA'
+pop$district[pop$district == 'MASSINGIRA'] <- 'MASSINGIR'
+pop$district[pop$district == 'XAI_XAI'] <- 'XAI-XAI CITY'
+pop$district[pop$district == 'XAI-XAI'] <- 'XAI-XAI DISTRICT'
+bes$district[bes$district == 'MANJACAZE'] <- 'MANDLAKAZI'
+
+# Get a date helper for standardizing weekly dates to saturday
+date_helper <- create_date_helper()
+
+bes <-
+  bes %>%
+  left_join(date_helper,
+            by = c('year', 'week'))
+
+# Get some date objects
+bes$month <- as.numeric(format(bes$date, '%m'))
+bes$day <- as.numeric(format(bes$date, '%d'))
+
+# Keep only through end of 2016
+bes <- bes %>%
+  filter(date <= '2016-12-31')
+
+# reorder
+bes <- bes %>%
+  ungroup %>%
+  dplyr::select(year,
+                week,
+                date,
+                month,
+                day,
+                province,
+                district,
+                age_group,
+                cases) %>%
+  arrange(date, province, district, age_group)
 
 # Join population to data
-df  <- df %>%
-  left_join(pop,
-            by = c("year", "district", 'age'))
-
-# Substitute NA with 0
-df$cases[is.na(df$cases)] <- 0
+df  <- bes %>%
+  left_join(pop %>% dplyr::select(-province),
+            by = c("year", "district",  'age_group'))
 
 # Make incidence
 df <- 
@@ -254,32 +550,40 @@ df <-
   mutate(p = cases / population) %>%
   mutate(pk = p * 1000)
 
-# Get some date objects
-df$month <- as.numeric(format(df$date, '%m'))
-df$day <- as.numeric(format(df$date, '%d'))
-
-# Keep only through end of 2016
-df <- df %>%
-  filter(date <= '2016-12-31')
-
-# Get a date helper for standardizing weekly dates to saturday
-date_helper <- create_date_helper()
-
-df <- df %>% ungroup
-
-df <- df %>%
-  dplyr::select(-date) %>%
-  left_join(date_helper,
-            by = c('year', 'week'))
-
 # Write data
-write_csv(df, 'data/outputs/cases.csv')
+write_csv(df, 'data/outputs/cases_and_population.csv')
+write_csv(bes, 'data/outputs/cases_only.csv')
+write_csv(pop, 'data/outputs/population.csv')
 
 # Remove unecessary objects
-rm(d2, date_helper, mb, pop,
-   final_list, i, sh, counter,
-   this_dow,
-   read_population)
+rm(district_matcher,
+   mb,
+   pop,
+   pop_gaza,
+   pop_maputo,
+   sm,
+   these_data,
+   x,
+   final_list,
+   gaza_dir,
+   good_columns,
+   i,
+   j,
+   maputo_dir,
+   mb_files,
+   mb_files_gaza,
+   mb_files_maputo,
+   mb_list,
+   sh,
+   sm_files,
+   sm_files_gaza,
+   sm_files_maputo,
+   sm_list,
+   this_district,
+   this_file,
+   this_file_path,
+   this_province,
+   this_year)
 
 # # See incidence
 # library(cism)

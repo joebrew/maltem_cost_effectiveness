@@ -1,7 +1,7 @@
 ---
 title: "Cost-effectiveness of a malaria elimination campaign"
 author: "Laia Cirera, Joe Brew, Elisa Sicuri"
-date: "`r Sys.Date()`"
+date: "`r March 31, 2017`"
 output:
  tufte::tufte_html: default
  tufte::tufte_handout:
@@ -44,14 +44,27 @@ bes <- df
 # Create variables 
 bes <- 
   bes %>%
-  mutate(mda=ifelse(date<"2015-11-08", "pre_mda", 
-                    ifelse(date<"2016-02-04", "mda", "post_mda")),
+  mutate(mda=ifelse(date<"2015-08-01", "pre_maltem", 'maltem'),
          intervention=district=="MAGUDE",
          magude = ifelse(district == 'MAGUDE', 'Magude', 'Not Magude'))
 
+# Create a time since 2010 variable
+bes <- bes %>%
+  mutate(time_since_2010 = as.numeric(date - as.Date('2010-01-01')))
+
+# Make a season variable
+bes <- bes %>%
+  mutate(season = ifelse(month %in% 1:5, 'high', 'low'))
 
 # Create model to estimate effectiveness
-mod <-lm(pk ~ mda*intervention + irs_coverage, data=bes, weights = population)
+mod <-lm(pk ~ mda*intervention + 
+           irs_coverage + 
+           season +
+           factor(month) +
+           time_since_2010, 
+         data=bes %>%
+           filter(date >= '2012-01-01'), 
+         weights = population)
 ```
 
 Model parameters
@@ -84,7 +97,7 @@ counter_factual <-
   mutate(intervention = FALSE)
 
 counter_factual$p_cf <- predict(mod, counter_factual)
-counter_factual$cases_cf <- counter_factual$p_cf*counter_factual$population 
+counter_factual$cases_cf <-(counter_factual$p_cf/1000)*counter_factual$population 
 counter_factual$cases_averted <- counter_factual$cases_cf - counter_factual$cases
 
 # Get sum of averted cases
@@ -226,6 +239,93 @@ x <- counter_factual %>%
             cases_cf = sum(cases_cf))
 
 DT::datatable(total_intervention_cost)
+
+# Plot of the counterfactual and real
+real <- bes %>%
+  filter(district == 'MAGUDE') %>%
+  mutate(status = 'observed')
+cf <- counter_factual %>%
+  # filter(year == 2016) %>%
+  filter(year < 2017) %>%
+  mutate(status = 'counterfactual') %>%
+  mutate(cases = cases_cf,
+         p = p_cf)
+plot_data <- bind_rows(real, cf)
+
+x <- plot_data %>%
+  filter(date >= '2015-08-01') %>%
+  group_by(status, year) %>%
+  summarise(total_cases = sum(cases))
+
+days_of_observation <- as.numeric(as.Date('2016-12-31') - as.Date('2015-08-01'))
+
+plot_data <- plot_data %>%
+  group_by(year, week, status) %>%
+  summarise(month = first(month),
+            date = first(date),
+            cases = sum(cases),
+            population = sum(population)) %>%
+  ungroup %>%
+  mutate(p = cases / population) %>%
+  mutate(pk = p * 1000)
+
+
+library(cism)
+plot_data <- plot_data %>%
+ filter(date >= '2014-07-01')
+g <- ggplot(data = plot_data ,
+       aes(x = date,
+           y = pk,
+           group = status,
+           color = status)) +
+  geom_line(alpha = 0.6) +
+  theme_cism() +
+  labs(x = 'Date',
+       y = 'Weekly incidence per 1000',
+       title = 'Observed vs. counterfactual',
+       subtitle = 'Preliminary effectivenesss model') +
+  scale_color_manual(name = 'Status',
+                     values = c('darkorange', 'darkgreen'))
+g +
+  geom_vline(xintercept = c(as.numeric(as.Date('2015-08-01')),
+                            as.numeric(as.Date('2015-11-01'))),
+             alpha = 0.5,
+             lty = 2)
+
+# By mes
+pdm <- plot_data %>%
+  mutate(date = as.Date(paste0(year, '-',
+                               month, '-01'))) %>%
+  group_by(date, status) %>%
+  summarise(pk = mean(pk))
+ggplot(data = pdm ,
+       aes(x = date,
+           y = pk,
+           group = status,
+           color = status)) +
+  geom_line(alpha = 0.6) +
+  theme_cism() +
+  labs(x = 'Date',
+       y = 'Monthly incidence per 1,000',
+       title = 'Preliminary effectiveness model',
+       subtitle = 'Magude district') +
+  scale_color_manual(name = '',
+                     values = c('darkorange', 'darkgreen')) +
+    geom_vline(xintercept = c(as.numeric(as.Date('2015-08-01')),
+                            as.numeric(as.Date('2015-11-09')),
+                            as.numeric(as.Date('2016-12-02'))),
+             alpha = 0.5,
+             lty = 2)
+
+# Get difference b/w 2016 counterfactual and real
+x <- counter_factual %>%
+  filter(year == 2016) %>%
+  summarise(cf = sum(cases_cf, na.rm = TRUE),
+            cr = sum(cases)) %>%
+  mutate(cases_averted = cf - cr)
+
+# write a csv for laia
+write_csv(plot_data, '~/Desktop/cf_vs_observed.csv')
 ```
 
 

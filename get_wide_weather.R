@@ -1,6 +1,6 @@
 # This should be run after "get_weather_data.R"
 # It assumes object in memory from that
-source('get_weather_data.R')
+# source('get_weather_data.R')
 
 library(tidyverse)
 
@@ -168,143 +168,10 @@ if('mozambican_weather_wide.csv' %in% dir('noaa_data/')){
     }
   }
   save.image('~/Desktop/backup.RData')
-  # Remove 2010 rows
-  weather_weekly <-
-    weather_weekly %>%
-    filter(year >= 2011)
-  
+
   # Write csv
   wide_weather <- weather_weekly
-  write_csv(wide_weather, 
+  readr::write_csv(wide_weather, 
             'noaa_data/mozambican_weather_wide.csv')
 }
 
-# # Source weather functions
-# source('weather_functions.R')
-# 
-# #### Joe's script for RF, Ridge, Lasso, and enet
-# 
-# ##########
-# # load libraries 
-# ##########
-# library(caret)
-# library(glmnet)
-# library(randomForest)
-# library(kernlab)
-# library(pROC)
-# library(Metrics)
-# library(doParallel)
-# library(nnet)
-# library(dplyr)
-# 
-# ##########
-# # get data
-# ##########
-# mod_dat <- 
-#   left_join(df,
-#             wide_weather %>%
-#               dplyr::select(-date, -precipitation_risk),
-#             by = c('year', 'week', 'district')) %>%
-#   ungroup %>%
-#   filter(date >= '2011-01-01',
-#          date <= '2012-01-01') %>%
-#   filter(!is.na(date))
-# 
-# 
-# # Remove all NA columns
-# mod_dat <- data.frame(mod_dat)
-# flag <- FALSE
-# nas <- c()
-# for (j in 1:ncol(mod_dat)){
-#   flag[j] <- all(is.na(mod_dat[,j]))
-#   nas[j] <- length(which(is.na(mod_dat[,j])))
-# }
-# mod_dat <- mod_dat[,!flag]
-# 
-# ##########
-# # Run Models 
-# ##########
-# 
-# ##########
-# # Run Random Forest
-# ##########
-# # EXPLANATION 
-# # line by line comments are in joe_functions.R
-# # nfolds argument is how many folds you want on your training data to tune parameters like tuneGrid in caret package
-# # cutoff is where you want to split your training and test data (70% train, 30% test)
-# # iterations is how many times you you make that split.
-# rfResults <- rfPred(model_data = mod_dat,
-#                     nfolds = 5,
-#                     cutoff = 0.7,
-#                     iterations = 10)
-# 
-# #  This extracts predictions and real values from all iterations 
-# # from result list and plots them against each other
-# plotModel(rfResults, main = 'Random Forest Regression')
-# 
-# 
-# #########
-# # Run enet
-# #########
-# # few steps in enet
-# # 1) optimize model to choose alpa - between 0-1 that determines the proportion of shrinkage (lasso and ridge)
-# # 2) once alpha is chosen, optimize model for value of lambda (the actual penalization parameter), that is lamda for which there is lowest error
-# # on training data (this lambda MUST BE USED WHEN TESTING DATA. i coded it that way, so dont worry about 
-# # doing that by hand)
-# # 3) once alpha and lambda is chosen, model is trained with alpha and 100 lambdas. 
-# # 4) when test on on test data, it returns predictions for all 100 values of lambda, but code
-# # subsets predictions based on the lambda used in training data - those are your predictions
-# 
-# # EXPLANATION 
-# # N_CV_REPEATS is how many times you want to run model to choose alpha. if just 1 it will 
-# # return a vector of alphas and you simply get the min. if you choose 5 it will return a matrix 
-# # with 5 columns and you avg across them and then find min. its all in the code
-# # nfolds is how many folds you want on training data 
-# # cutoff is where you want to split your training and test data (70% train, 30% test)
-# # iterations is how many times you you make that split.
-# enetResults <- enetPred(mod_dat,
-#                         N_CV_REPEATS = 2,
-#                         nfolds = 5,
-#                         cutoff = 0.7, 
-#                         iterations = 10)
-# 
-# plotModel(enetResults, main = 'Enet Regression')
-# 
-# ##########
-# # Run Lasso
-# ##########
-# # Literally exact same steps as enet, but instead of using the model to find an 'optimal' alpha, you
-# # simply set it to 1 (if its lass, 0 if ridge)
-# 
-# # EXPLANATION 
-# # alpha indicates if it will be lasso or ridge
-# # nfolds is how many folds you want on training data 
-# # cutoff is where you want to split your training and test data (70% train, 30% test)
-# # iterations is how many times you you make that split.
-# lassoResutls <- regPred(mod_dat, 
-#                         alpha = 1, 
-#                         nfolds = 10, 
-#                         cutoff = 0.7, 
-#                         iterations = 10)
-# 
-# plotModel(lassoResutls, main = 'Lasso Regression')
-# 
-# ##########
-# # Run ridge
-# ##########
-# # Literally exact same steps as enet, but instead of using the model to find an 'optimal' alpha, you
-# # simply set it to 0 (if its ridge, 1 if ridge)
-# 
-# # EXPLANATION 
-# # alpha indicates if it will be lasso or ridge
-# # nfolds is how many folds you want on training data 
-# # cutoff is where you want to split your training and test data (70% train, 30% test)
-# # iterations is how many times you you make that split.
-# ridgeResutls <- regPred(mod_dat, 
-#                         alpha = 0, 
-#                         nfolds = 10, 
-#                         cutoff = 0.7, 
-#                         iterations = 10)
-# 
-# 
-# plotModel(ridgeResutls, main = 'Ridge Regression')
