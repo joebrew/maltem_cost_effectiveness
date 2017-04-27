@@ -36,6 +36,9 @@ create_date_helper <-
       dplyr::select(new_date, year, week) %>%
       rename(date = new_date)
     date_helper <- date_helper[!duplicated(date_helper$date),]
+    
+    # Add 1 to all week numbers so as to get weeks 1-52, rather than
+    # 0-51
     return(date_helper)
   }
 

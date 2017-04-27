@@ -10,30 +10,45 @@ source('get_weather_data.R')
 # IRS data
 source('get_irs_data.R')
 
+# ITN data
+source('get_itn_data.R')
+
+# Join df (bes + population) to weather
 df <-		
   left_join(x = df,		
-            y = weather,		
+            y = weather_weekly,		
             by = c('district', 'date'))
+# 
+# # Join with IRS
+# df <- 
+#   left_join(x = df,
+#             y = irs %>%
+#               dplyr::select(-houses) %>%
+#               rename(people_irs = people),
+#             by = c('district', 'year')) 
+# 
+# # Get IRS coverage
+# df <- df %>%
+#   group_by(district, year, week) %>%
+#   mutate(district_population = sum(population, na.rm = TRUE)) %>%
+#   ungroup %>%
+#   mutate(irs_coverage = people_irs / district_population * 100) %>%
+#   # Remove unecessary variables
+#   dplyr::select(-people_irs, -district_population)
 
-# Join with IRS
-df <- 
-  left_join(x = df,
-            y = irs %>%
-              dplyr::select(-houses) %>%
-              rename(people_irs = people),
-            by = c('district', 'year')) 
 
-# Get IRS coverage
-df <- df %>%
-  group_by(district, year, week) %>%
-  mutate(district_population = sum(population, na.rm = TRUE)) %>%
-  ungroup %>%
-  mutate(irs_coverage = people_irs / district_population * 100) %>%
-  # Remove unecessary variables
-  dplyr::select(-people_irs, -district_population)
+# Write data for sharing with collaborators
+write_csv(df, 'data/outputs/cases_population_weather.csv')
+write_csv(bes, 'data/outputs/cases_only.csv')
+write_csv(pop, 'data/outputs/population.csv')
+# Write csv for weather data
+write_csv(weather_weekly, 'data/outputs/weather_weekly.csv')
+write_csv(weather, 'data/outputs/weather_daily.csv')
+# Write csv for itn data
+write_csv(itn, 'data/outputs/itn.csv')
+# Write csv for irs data
+write_csv(irs, 'data/outputs/irs.csv')
 
-# Save a copy
-write_csv(df, 'data/outputs/master.csv')
 
 # 
 # 

@@ -30,7 +30,6 @@ irs <-
            district,
            year) %>%
   summarise(houses_irs = sum(as.numeric(as.character(gsub(',', '', houses))), na.rm = TRUE),
-            people_irs = sum(as.numeric(as.character(gsub(',', '', people))), na.rm = TRUE))
+            people_irs = sum(as.numeric(as.character(gsub(',', '', people))), na.rm = TRUE)) %>%
+  ungroup
 
-# Write data
-write_csv(irs, 'data/outputs/irs.csv')

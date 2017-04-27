@@ -95,6 +95,53 @@ if('mozambican_weather.csv' %in% dir('noaa_data')){
            min = convert_to_number(`min`),
            prcp = convert_to_number(prcp))
   
+  # Since noaa has some missing days, interpolate
+  left <- expand.grid(station_name = sort(unique(noaa$station_name)),
+                      date = sort(unique(noaa$date)))
+  noaa <- left_join(left,
+                    noaa,
+                    by = c('station_name', 'date'))
+  # Flag estimations
+  noaa$estimated <- ifelse(is.na(noaa$lat), TRUE, FALSE)
+  # Performance interpolation
+  x <-
+    noaa %>%
+    arrange(date) %>%
+    group_by(station_name) %>%
+    mutate(temp = zoo::na.approx(object = temp,
+                                 x = date,
+                                 na.rm = FALSE),
+           dewp = zoo::na.approx(object = dewp,
+                                 x = date,
+                                 na.rm = FALSE),
+           wdsp = zoo::na.approx(object = wdsp,
+                                 x = date,
+                                 na.rm = FALSE),
+           mxspd = zoo::na.approx(object = mxspd,
+                                 x = date,
+                                 na.rm = FALSE),
+           max = zoo::na.approx(object = max,
+                                 x = date,
+                                 na.rm = FALSE),
+           min = zoo::na.approx(object = min,
+                                 x = date,
+                                 na.rm = FALSE),
+           prcp = zoo::na.approx(object = prcp,
+                                 x = date,
+                                 na.rm = FALSE))
+  
+  # Fix missing lat/lons
+  ll <- noaa %>%
+    group_by(station_name) %>%
+    summarise(lat = dplyr::first(lat[!is.na(lat)]),
+              lon = dplyr::first(lon[!is.na(lon)]))
+  
+  noaa <- noaa %>%
+    dplyr::select(-lat,
+                  -lon) %>%
+    left_join(ll,
+              by = 'station_name')
+  
   # Interpolate for our locations
   library(sp)
   x <- cism::moz2
@@ -175,6 +222,4 @@ weather_weekly <-
   
 rm(date_helper)
 
-# Write a csv
-write_csv(weather_weekly, 'data/outputs/weather_weekly.csv')
-write_csv(weather, 'data/outputs/weather_daily.csv')
+

@@ -232,7 +232,7 @@ for(i in 1:length(sm_files)){
       read_excel(this_file_path,
                  skip = 1)
     
-    these_data$province <- 'Maputo'
+    these_data$province <- this_province
     
     if(this_file == "SIS-MA_2016-17.xls"){
       these_data <-
@@ -322,14 +322,9 @@ sm$src <- 'SM'
 bes <- bind_rows(mb,
                  sm)
 
-# Keep only malaria
-bes <- 
-  bes %>%
-  filter(disease == 'MALARIA')
-
 # See if there are disagreements by src
 x = bes %>%
-  group_by(year, week, province, district, age_group) %>%
+  group_by(year, week, province, district, age_group, disease) %>%
   summarise(n = n(),
             min_value = min(value),
             max_value = max(value)) %>%
@@ -338,7 +333,7 @@ x = bes %>%
 
 # There are. So we average
 bes <- bes %>%
-  group_by(year, week, province, district, age_group) %>%
+  group_by(year, week, province, district, age_group, disease) %>%
   summarise(has_mb = length(which(src == 'MB')) == 1,
             has_sm = length(which(src == 'SM')) == 1,
             cases = round(mean(value,
@@ -536,6 +531,7 @@ bes <- bes %>%
                 province,
                 district,
                 age_group,
+                disease,
                 cases) %>%
   arrange(date, province, district, age_group)
 
@@ -550,15 +546,9 @@ df <-
   mutate(p = cases / population) %>%
   mutate(pk = p * 1000)
 
-# Write data
-write_csv(df, 'data/outputs/cases_and_population.csv')
-write_csv(bes, 'data/outputs/cases_only.csv')
-write_csv(pop, 'data/outputs/population.csv')
-
 # Remove unecessary objects
 rm(district_matcher,
    mb,
-   pop,
    pop_gaza,
    pop_maputo,
    sm,

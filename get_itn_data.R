@@ -16,5 +16,3 @@ itn <-
                 month) %>%
   filter(province %in% c('Gaza', 'Maputo'))
 
-# Write data
-write_csv(itn, 'data/outputs/itn.csv')
