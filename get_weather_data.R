@@ -1,5 +1,6 @@
 # Packages
 library(tidyverse)
+library(sp)
 
 # Source helpers
 source('helpers.R')
@@ -177,75 +178,3 @@ rm(date_helper)
 # Write a csv
 write_csv(weather_weekly, 'data/outputs/weather_weekly.csv')
 write_csv(weather, 'data/outputs/weather_daily.csv')
-# library(scales)
-# library(ggthemes)
-# ggplot(data = weather %>% 
-#          filter(district == 'MANHICA') %>% 
-#          mutate(date = as.Date('2016-12-31') + day_number), 
-#        aes(x = date, y = temp_max)) + 
-#   geom_point(alpha = 0.3,
-#              color = 'darkorange') +
-#   scale_x_date(labels = date_format("%B")) +
-#   labs(x = 'Fecha',
-#        y = 'Temperatura maxima (C)',
-#        title = 'Lo peor ya pasó',
-#        subtitle = 'Temperature máxima en Manhiça, 2009-2016, interpolada de estaciones NOAA cercanas') +
-#   geom_vline(xintercept = as.numeric(Sys.Date())) +
-#   geom_label(data = data_frame(date = Sys.Date(),
-#                                y = 22,
-#                                label = 'Today'),
-#              aes(x = date,
-#                  y = y,
-#                  label = label),
-#              color = 'darkgreen',
-#              alpha = 0.6) +
-#   geom_hline(yintercept = seq(20, 40, 10),
-#              lty = 2,
-#              alpha = 0.2) +
-#   geom_smooth(color = 'darkgreen') +
-#   theme_cism()
-# 
-# 
-# ggplot(data = weather %>% 
-#          filter(district == 'MANHICA') %>% 
-#          mutate(date = as.Date('2016-12-31') + day_number) %>%
-#          mutate(date = as.Date(format(date, '%Y-%m-01'))) %>%
-#          filter(date <= '2017-12-31') %>%
-#          group_by(date) %>%
-#          summarise(precipitation = mean(precipitation, na.rm = TRUE)), 
-#        aes(x = date, y = precipitation)) + 
-#   geom_bar(alpha = 0.7,
-#            stat = 'identity',
-#              fill = 'darkorange') +
-#   scale_x_date(labels = date_format("%B")) +
-#   labs(x = 'Mes',
-#        y = 'Milimetros',
-#        title = 'Soon, no more rain',
-#        subtitle = 'Precipitación diaria media en Manhiça, 2009-2016, interpolada de estaciones NOAA cercanas') +
-#   # geom_smooth(color = 'darkgreen') +
-#   theme_cism()
-
-# # Plot with mozambique
-# library(cism)
-# library(sp)
-# cols <- ifelse(moz3@data$NAME_1 == 'Maputo',
-#                'yellow',
-#                ifelse(moz3@data$NAME_1 == 'Gaza',
-#                       'orange',
-#                       'white'))
-# plot(moz3, col = cols,
-#      border = adjustcolor('grey', alpha.f = 0.2))
-# plot(moz0, add = TRUE)
-# x <- noaa %>%
-#   filter(!duplicated(lon, lat))
-# points(x$lon, x$lat, 
-#        col = adjustcolor('darkred', alpha.f = 0.6),
-#        pch = 14)
-# legend('bottomright',
-#        col = c(NA, NA, adjustcolor('darkred', alpha.f = 0.6)),
-#        fill = c('orange', 'yellow', NA),
-#        border = NA,
-#        legend = c('Gaza', 'Maputo', 'Data'),
-#        bty = 'n',
-#        pch = c(NA, NA, 14))
-# title(main = 'Spatial distribution of available NOAA temperature data')

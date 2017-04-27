@@ -1,3 +1,6 @@
 library(tidyverse)
-library(foreign)
-ine <- read.spss('data/ine/Censo_Database.sav', to.data.frame=TRUE)
+library(memisc)
+
+ine <- as.data.set(spss.system.file('data/ine/Censo_Database.sav'))
+save(ine,
+     file = 'data/ine/Censo_Database.RData')
