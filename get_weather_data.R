@@ -157,7 +157,20 @@ if('mozambican_weather.csv' %in% dir('noaa_data')){
   coords$district[coords$district == 'XAI-XAI'] <- 'XAI-XAI DISTRICT'
   coords$district[coords$district == 'MANHIÇA'] <- 'MANHICA'
   coords$district[coords$district == 'MATUTUÍNE'] <- 'MATUTUINE'
-  # coords <- read_csv('public_data/coordinates_of_maputo_districts.csv')
+  
+  # Add a row for matola
+  matola <- data_frame(x = 32.46580,
+                       y = -25.92391,
+                       district = 'MATOLA')
+  coords <- bind_rows(coords, 
+                      matola)
+  # Add a row for xai-xai city
+  xxc <- coords %>% filter(district == 'XAI-XAI DISTRICT') %>%
+    mutate(district = 'XAI-XAI CITY')
+  coords <- bind_rows(coords,
+                      xxc)
+  # Get matola
+  # coords2 <- read_csv('public_data/coordinates_of_maputo_districts.csv')
   
   # For each location, get weather
   source('helpers.R')
