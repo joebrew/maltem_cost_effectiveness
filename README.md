@@ -40,8 +40,10 @@ openclinica_password: xxx
 2. Ensure that your `data` folder is populated with the following structure. Authorized collaborators can request data from joebrew@gmail.com
 
 ```
+├── binaries
 ├── ine
 │   └── Censo_Database.sav
+├── outputs
 ├── Projeccoes_distritais_2007_20240
 │   ├── Cabo_delgado_.xlsx
 │   ├── Gaza - Distritos.xls
@@ -178,28 +180,62 @@ openclinica_password: xxx
 └── vector_control_ministry
     ├── irs_district_matcher.csv
     ├── IRS_Maputo Province_clean.xlsx
+    ├── IRS_Mozambique_clean.csv
+    ├── IRS_mozambique_clean_final.csv
+    ├── IRS_mozambique_clean_final.xlsx
     ├── IRS_Mozambique_clean - IRS_Maputo.csv
     ├── IRS_Mozambique_clean.xlsx
+    ├── ITN_Mozambique_clean.csv
+    ├── ITN_Mozambique_clean.xls
+    ├── ITN_Mozambique.csv
     └── ITN_Mozambique.xls
-
-(15 directories, 134 files)
-
 ```
 
 ## Outputs
 
-Running `master.R` will call the component code to generate the following data outputs (ie, cleaned, analyzable datasets), also in the `data` directory:
+Running `master.R` will call the component code to generate the following data outputs (ie, cleaned, analyzable datasets), in the `data/outputs` directory:
 
 ```
-├── outputs
-│   ├── cases_only.csv
-│   ├── cases_population_weather.csv
-│   ├── irs.csv
-│   ├── itn.csv
-│   ├── population.csv
-│   ├── weather_daily.csv
-│   └── weather_weekly.csv
+├── cases_only.csv
+├── cases_population_weather.csv
+├── cases_population_weather_itn_irs.csv
+├── irs.csv
+├── itn.csv
+├── population.csv
+├── weather_daily.csv
+└── weather_weekly.csv
 ```
+
+## Headers
+
+Running `master.R` produces a data.frame named `df`, which is the tabular equivalent of "cases_population_weather_itn_irs.csv". Below if a an explanation of each column.
+
+- `year`: The year of the observation.  
+- `week`: The week of the observation.  
+- `date`: The date of the Saturday in the week of the observation.  
+- `month`: The (numeric) month of the observation.  
+- `day`: The day of the month of the observation.  
+- `province`: The province of the observation; one of "Gaza" or "Maputo".
+- `district`: The district of the observation.  
+- `age_group`: The age group of the observation. Groups are 0 to 4 years of age, and 5+ years of age.  
+- `disease`: The disease of the number of cases in question. Diseases are one of "malaria" or "diarrhea".  
+- `cases`: The number of cases of the observation.   
+- `population`: The population of the age group in question, estimated using INE figures at the yearly level.   
+- `p`: The "proportion", ie, the number of cases divided by the population.  
+- `pk`: The above "proportion" multiplied by 1,000 (ie, cases per 1,000).  
+- `itn_coverage`: The number of insecticide treated nets (ITNs) distributed in that district in the year of the observation as a percentage of the population of that district in the year of the observation. In some cases, this exceeds 100% do to difference in population estimates by the INE and the MoH.  
+- `irs_houses`: The number of houses which were subject to indoor residual spraying (IRS) in the last IRS campaign in that district. This variable should be considered only in conjunction with the "weeks_since_last_irs_campaign_end" variable.   
+- `irs_people`: The number of people who resided in the houses described in the above variable.  
+- `weeks_since_last_irs_campaign_end`: The number of weeks since the end of the last IRS campaign in that district. If `NA`, this means that we have no record of a previous IRS campaign; if 0, this means that the date in question was _during_ and IRS campaign; if greater than 0, this means that the date in question was _after_ an IRS campaign, and the `irs_houses`, `irs_people`, `irs_coverage_houses`, and `irs_coverage_people` variables all pertain to the campaign which took place **n** weeks prior to the date of this observation ("n" being the number in this column).  
+- `irs_coverage_houses`: `irs_houses` divided by the `population` of the entire district at the time of the campaign, multiplied by 100. In some cases, this exceeds 100% do to difference in population estimates by the INE and the MoH.  
+- `irs_coverage_people`: `irs_people` divided bythe `population` of the entire district at the time of the campaign, multiplied by 100 (ie, the percentage of people that were covered in the last IRS campaign). In some cases, this exceeds 100% do to difference in population estimates by the INE and the MoH.  
+- `precipitation`: The total rainfall, in milimeters, for the district during the week in question. Note that this, as with _all_ the weather data, is interpolated based on NOAA weather stations.  
+- `temp`: The average temperature of the week in question, in celcius.  
+- `temp_max`: The maximum temperature of the week in question, in celcius.  
+- `temp_min`: The minimum temperature of the week in question, in celcius.  
+- `dew_point`: The average dew point of the week in question, in celcius.  
+- `wind_speed`: The average wind speed of the week in question, in miles per hour.  
+- `wind_speed_max`: The maximum wind speed of the week in question, in miles per hour.  
 
 ## Data sources
 

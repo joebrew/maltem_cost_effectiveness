@@ -1,18 +1,34 @@
 library(tidyverse)
-itn <- read_excel('data/vector_control_ministry/ITN_Mozambique.xls',
-                  skip = 3)
+itn <- read_csv('data/vector_control_ministry/ITN_Mozambique_clean.csv',
+                skip = 0)
 itn <- itn[,!is.na(names(itn))]
 
 # Clean up names
 itn <-
   itn %>%
-  rename(province = PROVINCIA,
-         district = DISTRITOS,
-         month = `Mes de distribuic`,
-         nets = `Redes Distribuidas`) %>%
+  rename(nets = ITN_distributed) %>%
   dplyr::select(province,
                 district, 
                 year,
-                month) %>%
+                month,
+                nets) %>%
   filter(province %in% c('Gaza', 'Maputo'))
+
+# Make cap
+itn <- itn %>%
+  mutate(district = toupper(district))
+
+# Fix names
+itn <-
+  itn %>%
+  mutate(district = ifelse(district == 'MANJACAZE', 'MANDLAKAZI',
+                           ifelse(district == 'XAI-XAI', 'XAI-XAI DISTRICT',
+                                  ifelse(district == 'CIDADE DA MATOLA', 'MATOLA', district))))
+
+
+# Make monthly
+itn <- itn %>%
+  group_by(province, district, year, month) %>%
+  summarise(nets = sum(nets)) %>%
+  ungroup
 

@@ -5,7 +5,7 @@ create_date_helper <-
             'the date of the Saturday in that week (weeks are Sunday-Saturday')
     # Standardize dates (use dates ending on Saturday of each week)
     date_helper <- 
-      data_frame(date = seq(as.Date('2009-01-01'),
+      data_frame(date = seq(as.Date('2004-01-01'),
                             as.Date('2017-12-31'),
                             by = 1))
     date_helper$dow <- weekdays(date_helper$date)
