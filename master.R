@@ -4,7 +4,7 @@ library(tidyverse)
 # BES data
 source('get_bes_data.R', encoding = "UTF-8")
 
-# Weater data
+# Weather data
 source('get_weather_data.R')
 
 # Lagged weather data
@@ -86,6 +86,7 @@ write_csv(pop, 'data/outputs/population.csv')
 # Write csv for weather data
 write_csv(weather_weekly, 'data/outputs/weather_weekly.csv')
 write_csv(weather, 'data/outputs/weather_daily.csv')
+write_csv(wide_weather, 'data/outputs/weather_wide.csv')
 # Write csv for itn data
 write_csv(itn, 'data/outputs/itn.csv')
 # Write csv for irs data
