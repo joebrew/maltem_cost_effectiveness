@@ -16,8 +16,8 @@ if('mozambican_weather_wide.csv' %in% dir('noaa_data/')){
     filter(date >= '2010-01-01')
   
   # Generate time ranges
-  starter <- seq(120, 5, by = -5)
-  ender <- seq(5, 120, by = 5)
+  starter <- seq(100, 0, by = -10)
+  ender <- seq(0, 100, by = 10)
   
   counter <- 0
   combos <- expand.grid(s = starter,

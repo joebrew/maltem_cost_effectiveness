@@ -4,8 +4,11 @@ library(tidyverse)
 # BES data
 source('get_bes_data.R', encoding = "UTF-8")
 
-# Precipitation data
+# Weater data
 source('get_weather_data.R')
+
+# Lagged weather data
+source('get_wide_weather.R')
 
 # IRS data
 source('get_irs_data.R')
@@ -70,10 +73,10 @@ df <-
             y = irs,
             by = c("year", "week", "province", "district"))
 
-# Join df (bes + population) to weather
+# Join df (bes + population) to wide weather
 df <-		
   left_join(x = df,		
-            y = weather_weekly,		
+            y = wide_weather,		
             by = c('district', 'date'))
 
 # Write data for sharing with collaborators
