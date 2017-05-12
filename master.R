@@ -73,10 +73,10 @@ df <-
             y = irs,
             by = c("year", "week", "province", "district"))
 
-# Join df (bes + population) to wide weather
+# Join df (bes + population) to weather
 df <-		
   left_join(x = df,		
-            y = wide_weather,		
+            y = weather_weekly,		
             by = c('district', 'date'))
 
 # Write data for sharing with collaborators
@@ -92,6 +92,12 @@ write_csv(itn, 'data/outputs/itn.csv')
 # Write csv for irs data
 write_csv(irs, 'data/outputs/irs.csv')
 
+# Join with wide weather
+df_wide <- 
+  left_join(x = df,
+            y = wide_weather)
+# Write wide weather too
+write_csv(df_wide, 'data/outputs/cases_population_weather_wide_itn_irs.csv')
 
 # 
 # 
