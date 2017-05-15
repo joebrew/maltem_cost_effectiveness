@@ -79,7 +79,14 @@ df <-
             y = weather_weekly,		
             by = c('district', 'date'))
 
+# Make an older and younger dataset
+df_young <-df %>% filter(age_group == '0-4')
+df_old <- df %>% filter(age_group == '5+')
+
 # Write data for sharing with collaborators
+write_csv(df_young, 'data/outputs/cases_population_weather_itn_irs_young_only.csv')
+write_csv(df_old, 'data/outputs/cases_population_weather_itn_irs_old_only.csv')
+
 write_csv(df, 'data/outputs/cases_population_weather_itn_irs.csv')
 write_csv(bes, 'data/outputs/cases_only.csv')
 write_csv(pop, 'data/outputs/population.csv')

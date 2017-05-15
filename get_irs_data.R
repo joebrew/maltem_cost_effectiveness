@@ -190,7 +190,10 @@ if('irs_data_cleaned.RData' %in% dir('data/binaries')){
       }
     }
   }
+  
+  # Join to dh
+  irs <- irs %>%
+    left_join(dh)
   save(irs,
        file = 'data/binaries/irs_data_cleaned.RData')
 }
-irs$irs_no_date <- NULL

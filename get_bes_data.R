@@ -535,6 +535,16 @@ bes <- bes %>%
                 cases) %>%
   arrange(date, province, district, age_group)
 
+# Remove the one weird dup for MANDLAKAZI
+bes <- bes %>%
+  arrange(date) %>%
+  mutate(dummy = 1) %>%
+  group_by(date, district, age_group, disease) %>%
+  mutate(dummy = cumsum(dummy)) %>%
+  filter(dummy == 1) %>%
+  ungroup %>%
+  dplyr::select(-dummy)
+
 # Join population to data
 df  <- bes %>%
   left_join(pop %>% dplyr::select(-province),
@@ -545,6 +555,8 @@ df <-
   df %>%
   mutate(p = cases / population) %>%
   mutate(pk = p * 1000)
+
+
 
 # Remove unecessary objects
 rm(district_matcher,
