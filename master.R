@@ -99,6 +99,112 @@ df_wide <-
 # Write wide weather too
 write_csv(df_wide, 'data/outputs/cases_population_weather_wide_itn_irs.csv')
 
+
+# # Make a plot of Magude over time
+# x <- df %>%
+#   filter(district == 'MAGUDE') %>%
+#   group_by(date, disease) %>% 
+#   summarise(cases = sum(cases),
+#             population = sum(population)) %>%
+#   ungroup %>%
+#   mutate(k = cases / population * 1000)
+# 
+# library(cism)
+# ggplot(data = x %>%
+#          filter(disease == 'MALARIA'),
+#        aes(x = date,
+#            y = k)) +
+#   # geom_point() +
+#   geom_line(color = 'darkorange',
+#             alpha = 0.8) +
+#   theme_cism() +
+#   labs(x = 'Date',
+#        y = 'Weekly incidence per 1,000',
+#        title = 'Malaria cases',
+#        subtitle = 'Magude, Mozambique')
+# 
+# 
+# # Currency
+# owd <- getwd()
+# setwd('../lendable/app')
+# library(lendable)
+# mzn <- fetch_db(query = "SELECT * FROM currency WHERE currency_type ='MZN'")
+# setwd(owd)
+# # Get to value of mzn
+# mzn$mzn <- 1/ mzn$usd 
+# mzn <- mzn %>%
+#   filter(date >= as.Date('2010-01-01'),
+#          mzn <= 0.15)
+# ggplot(data = mzn,
+#        aes(x = date,
+#            y = mzn)) +
+#   geom_line(color = 'darkorange',
+#             alpha = 0.8) +
+#   labs(x = 'Date',
+#        y = '?',
+#        title = 'Huge reduction',
+#        subtitle = 'Thanks, MALTEM!') +
+#   theme_cism() 
+# 
+# # Map of gaza and maputo
+# gm <- cism::moz1_fortified %>%
+#   filter(id %in% c('Maputo', 'Gaza'))
+# ggplot() +
+#   geom_polygon(data = gm,
+#                aes(x = long,
+#                    y = lat,
+#                    group = group,
+#                    fill = id),
+#                alpha = 0.7) +
+#   geom_polygon(data = mag3_fortified,
+#                aes(x = long,
+#                    y = lat,
+#                    group = group),
+#                fill = 'red') +
+#   theme_cism_map() +
+#   coord_map() +
+#   scale_fill_manual(name = '',
+#                     values = c('black', 'grey'))
+# 
+# # Create model
+# model_data <- df %>%
+#   filter(district == 'MAGUDE',
+#          disease == 'MALARIA') %>%
+#   group_by(date, disease) %>% 
+#   summarise(cases = sum(cases),
+#             population = sum(population)) %>%
+#   ungroup %>%
+#   mutate(k = cases / population * 1000) %>%
+#   mutate(month = format(date, '%B'))
+# fit <- lm(k ~ month + date, data = model_data %>% filter(date <= '2015-06-01'))
+# model_data$predicted <- predict(fit, model_data)
+# model_data <- model_data %>%
+#   dplyr::select(date, k, predicted) %>%
+#   rename(observed = k)
+# # make long
+# long <- model_data %>%
+#   gather(key,
+#          value,
+#          observed:predicted)
+# 
+# ggplot(data = long,
+#        aes(x = date,
+#            y = value,
+#            color = key)) +
+#   geom_line(size = 1.5,
+#             alpha = 0.8) +
+#   scale_y_sqrt() +
+#   theme_cism() +
+#   scale_color_manual(name = '',
+#                      values = c('darkgreen', 'darkorange')) +
+#   geom_hline(yintercept = 0) +
+#   labs(x = 'Date',
+#        y = 'Cases (scale: sqrt)',
+#        title = 'Observed vs. predicted',
+#        subtitle = 'Predicted = no MALTEM ')
+
+
+
 # 
 # 
 # library(cism)

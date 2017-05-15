@@ -105,3 +105,111 @@ g1
 ggsave('~/Desktop/magude.png')
 g2
 ggsave('~/Desktop/manhica.png')
+
+# GET incidence in ij
+x <- 
+  opd %>%
+  filter(!is.na(date)) %>%
+  mutate(date >= as.Date('2010-01-01')) %>%
+  mutate(year_month = lendable::date_truncate(date, 'month')) %>%
+  mutate(month = as.numeric(format(date, '%m'))) %>%
+  filter(place == 'Ilha Josinha') %>%
+  mutate(age_group = ifelse(age < 12, '0-0.99',
+                            ifelse(age < 60, '1-4.99',
+                                   ifelse(age >= 60, '5+', NA)))) %>%
+  mutate(year = as.numeric(format(date, '%Y'))) %>%
+  filter(year >= 2010) %>%
+  group_by(date, age_group) %>%
+  summarise(visits = n(),
+            malaria = length(which(malaria))) %>%
+  ungroup %>%
+  mutate(p = malaria / visits * 100)
+
+ggplot(data = x %>% filter(age_group != '5+'),
+       aes(x = date,
+           y = malaria,
+           group = age_group,
+           color = age_group)) +
+  geom_line(alpha = 0.6) +
+  # geom_point() +
+  theme_cism() +
+  labs(x = 'Age group',
+       y = 'Daily malaria cases')
+ggsave('~/Desktop/daily.png')
+
+write_csv(x, '~/Desktop/daily.csv')
+
+# GET incidence in ij
+x <- 
+  opd %>%
+  filter(!is.na(date)) %>%
+  mutate(date >= as.Date('2010-01-01')) %>%
+  mutate(year_month = lendable::date_truncate(date, 'month')) %>%
+  mutate(month = as.numeric(format(date, '%m'))) %>%
+  filter(place == 'Ilha Josinha') %>%
+  mutate(age_group = ifelse(age < 12, '0-0.99',
+                            ifelse(age < 60, '1-4.99',
+                                   ifelse(age >= 60, '5+', NA)))) %>%
+  mutate(year = as.numeric(format(date, '%Y'))) %>%
+  group_by(year, year_month, month, age_group) %>%
+  summarise(visits = n(),
+            malaria = length(which(malaria))) %>%
+  ungroup %>%
+  mutate(p = malaria / visits * 100) %>%
+  filter(year >= 2010)
+
+ggplot(data = x, #%>% filter(age_group != '5+'),
+       aes(x = year_month,
+           y = malaria,
+           group = age_group,
+           color = age_group)) +
+  geom_line() +
+  geom_point() +
+  theme_cism() +
+  labs(x = 'Age group',
+       y = 'Monthly malaria cases')
+
+ggsave('~/Desktop/monthly.png')
+
+by_month <- 
+  x %>%
+  group_by(month, year, age_group) %>%
+  summarise(malaria = sum(malaria)) %>% 
+  ungroup
+
+by_month$year <- factor(by_month$year)
+library(RColorBrewer)
+cols <- colorRampPalette(brewer.pal(n = 9, 'Spectral'))(length(unique(by_month$year)))
+ggplot(data = by_month,
+       aes(x = month,
+           y = malaria,
+           group = year,
+           color = year)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~age_group) +
+  scale_color_manual(name = 'Year',
+                     values = cols) +
+  geom_vline(xintercept = 4, lty = 2) +
+  theme_cism()
+ggsave('~/Desktop/monthly_overlapping_years.png')
+
+
+by_year <- x %>%
+  group_by(year, age_group) %>%
+  summarise(malaria = sum(malaria)) %>%
+  ungroup
+
+ggplot(data = by_year,
+       aes(x = year,
+           y = malaria,
+           color= age_group)) +
+  geom_point() +
+  geom_line() +
+  theme_cism() +
+  labs(x = 'Year',
+       y = 'Malaria cases',
+       title = 'Yearly malaria cases') +
+  scale_color_manual(name = 'Age group',
+                     values = c('red', 'orange', 'blue'))
+ggsave('~/Desktop/yearly.png')
