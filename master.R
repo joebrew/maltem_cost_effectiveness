@@ -7,8 +7,8 @@ source('get_bes_data.R', encoding = "UTF-8")
 # Weather data
 source('get_weather_data.R')
 
-# Lagged weather data
-source('get_wide_weather.R')
+# # Lagged weather data
+# source('get_wide_weather.R')
 
 # IRS data
 source('get_irs_data.R')
@@ -93,18 +93,18 @@ write_csv(pop, 'data/outputs/population.csv')
 # Write csv for weather data
 write_csv(weather_weekly, 'data/outputs/weather_weekly.csv')
 write_csv(weather, 'data/outputs/weather_daily.csv')
-write_csv(wide_weather, 'data/outputs/weather_wide.csv')
+# write_csv(wide_weather, 'data/outputs/weather_wide.csv')
 # Write csv for itn data
 write_csv(itn, 'data/outputs/itn.csv')
 # Write csv for irs data
 write_csv(irs, 'data/outputs/irs.csv')
 
-# Join with wide weather
-df_wide <- 
-  left_join(x = df,
-            y = wide_weather)
-# Write wide weather too
-write_csv(df_wide, 'data/outputs/cases_population_weather_wide_itn_irs.csv')
+# # Join with wide weather
+# df_wide <- 
+#   left_join(x = df,
+#             y = wide_weather)
+# # Write wide weather too
+# write_csv(df_wide, 'data/outputs/cases_population_weather_wide_itn_irs.csv')
 
 
 # # Make a plot of Magude over time

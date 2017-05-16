@@ -401,7 +401,196 @@ plotModel <- function(result_list,
   abline(0,1, lty = 3)
   corr <- round(cor(unlist(result_list[[4]]), unlist(result_list[[6]])), 2)
   legend("topleft", legend = paste0('correlation = ', corr), cex = 1, bty = 'n')
-  
-  
 }
 
+########
+# Define function for getting wide weather
+make_weather_wide <- function(weather,
+                              remove_before = '2010-01-01',
+                              go_forward = FALSE){
+  
+  # Generate time ranges
+  lowest <- 20
+  highest <- 100
+  starter <- seq(highest, lowest, by = lowest * -1)
+  ender <- seq(lowest, highest, by = lowest)
+  
+  # Add rows to weather
+  if(go_forward){
+    new_row <- weather[1,]
+    max_date <- max(weather$date)
+    new_row[,c('temp_max','temp','temp_min',
+               'precipitation')] <- NA
+    new_rows <- list()
+    for(i in 1:(lowest*2)){
+      this_row <- new_row
+      this_row$date <- max_date + i
+      new_rows[[i]] <- this_row
+    }
+    new_rows <- bind_rows(new_rows)
+    weather <- bind_rows(weather,
+                         new_rows)
+  }
+  
+  
+  counter <- 0
+  combos <- expand.grid(s = starter,
+                        e = ender)
+  combos <- combos %>% filter(s > e)
+  total <- nrow(combos)
+  
+  # Create empty columns
+  for (s in starter){
+    for (e in ender){
+      if(s > e){
+        weather[,paste0('precipitation_from_',
+                        s, '_to_',
+                        e, '_days_ago')] <-
+          NA
+        weather[,paste0('max_precipitation_from_',
+                        s, '_to_',
+                        e, '_days_ago')] <-
+          NA
+        weather[,paste0('min_precipitation_from_',
+                        s, '_to_',
+                        e, '_days_ago')] <-
+          NA
+        weather[,paste0('rainy_days_from_',
+                        s, '_to_',
+                        e, '_days_ago')] <-
+          NA
+        weather[,paste0('dry_days_from_',
+                        s, '_to_',
+                        e, '_days_ago')] <-
+          NA
+        weather[,paste0('min_temp_from_',
+                        s, '_to_',
+                        e, '_days_ago')] <-
+          NA
+        weather[,paste0('max_temp_from_',
+                        s, '_to_',
+                        e, '_days_ago')] <-
+          NA
+        weather[,paste0('avg_temp_from_',
+                        s, '_to_',
+                        e, '_days_ago')] <-
+          NA
+        # weather[,paste0('avg_dew_point_from_',
+        #                        s, '_to_',
+        #                        e, '_days_ago')] <-
+        #   NA
+        # weather[,paste0('avg_wind_speed_from_',
+        #                        s, '_to_',
+        #                        e, '_days_ago')] <-
+        #   NA
+        # weather[,paste0('max_wind_speed_from_',
+        #                        s, '_to_',
+        #                        e, '_days_ago')] <-
+        #   NA
+      }
+    }
+  }
+  
+  # Trim down weekly weather 
+  # Start on certain row of weather
+  start_row <- min(which(weather$date >= remove_before))
+
+  # Populate those columns with real values
+  for (s in starter){
+    for (e in ender){
+      
+      if(s > e){
+        counter <- counter + 1
+        
+        nrww <- nrow(weather)
+        for (i in start_row:nrww){
+          message(paste0('Combination ',
+                         counter,
+                         ' of ',
+                         total,
+                         ' combinations',
+                         '. Date ',
+                         i, 
+                         ' of ',
+                         nrww, 
+                         ' dates.'
+          ))
+          
+          this_district <- weather$district[i]
+          this_date <- weather$date[i]
+          
+          the_data <-
+            weather %>%
+            filter(date >= (this_date - s),
+                   date <= (this_date - e),
+                   district == this_district) %>%
+            summarise(the_sum = sum(precipitation, na.rm = TRUE),
+                      the_max = max(precipitation, na.rm = TRUE),
+                      the_min = min(precipitation, na.rm = TRUE),
+                      dry_days = length(which(precipitation == 0)),
+                      wet_days = length(which(precipitation > 0)),
+                      max_temp = max(temp_max, na.rm = TRUE),
+                      min_temp = min(temp_min, na.rm = TRUE),
+                      avg_temp = mean(temp, na.rm = TRUE))#,
+          # avg_dew_point = mean(dew_point, na.rm = TRUE),
+          # avg_wind_speed = mean(wind_speed, na.rm = TRUE),
+          # wind_speed_max = max(wind_speed_max, na.rm = TRUE))
+          
+          # Plug in the results
+          weather[i,paste0('precipitation_from_',
+                           s, '_to_',
+                           e, '_days_ago')] <-
+            the_data$the_sum
+          weather[i,paste0('max_precipitation_from_',
+                           s, '_to_',
+                           e, '_days_ago')] <-
+            the_data$the_max
+          weather[i,paste0('min_precipitation_from_',
+                           s, '_to_',
+                           e, '_days_ago')] <-
+            the_data$the_min
+          weather[i,paste0('rainy_days_from_',
+                           s, '_to_',
+                           e, '_days_ago')] <-
+            the_data$wet_days
+          weather[i,paste0('dry_days_from_',
+                           s, '_to_',
+                           e, '_days_ago')] <-
+            the_data$dry_days
+          weather[i,paste0('min_temp_from_',
+                           s, '_to_',
+                           e, '_days_ago')] <-
+            the_data$min_temp
+          weather[i,paste0('max_temp_from_',
+                           s, '_to_',
+                           e, '_days_ago')] <-
+            the_data$max_temp
+          weather[i,paste0('avg_temp_from_',
+                           s, '_to_',
+                           e, '_days_ago')] <-
+            the_data$avg_temp
+          # weather[i,paste0('avg_dew_point_from_',
+          #                         s, '_to_',
+          #                         e, '_days_ago')] <-
+          #   the_data$avg_dew_point
+          # weather[i,paste0('avg_wind_speed_from_',
+          #                         s, '_to_',
+          #                         e, '_days_ago')] <-
+          #   the_data$avg_wind_speed
+          # weather[i,paste0('max_wind_speed_from_',
+          #                         s, '_to_',
+          #                         e, '_days_ago')] <-
+          #   the_data$wind_speed_max
+        }
+      }
+    }
+  }
+  
+  # Trim down
+  weather <- 
+    weather %>%
+    filter(!is.na(date)) %>%
+    filter(date >= as.Date(remove_before))
+  
+  return(weather)
+}

@@ -1,0 +1,258 @@
+---
+title: "Weather accurately predicts clinical malaria in Magude"
+author: "MALTEM"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+fig_height: 2.6
+fig_width: 4
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+---
+
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, comment = NA, error= FALSE, cache = F}
+# No scientific notation
+options(scipen=999)
+
+# Packages 
+library(databrew)
+library(cism)
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(gsheet)
+library(readr)
+
+# Options for this document (ie, whether to show code, errors, etc.)
+knitr::opts_chunk$set(comment = NA, 
+               echo = FALSE,
+               eval = TRUE,
+               warning = FALSE, 
+               message = FALSE, 
+               error = TRUE, 
+               cache = FALSE)
+
+# Read in wide weather data
+source('../../weather_functions.R', chdir = TRUE)
+source('../../master.R', chdir = TRUE)
+
+# Get weather for Magude
+if('mag_weather_wide.RData' %in% dir()){
+  load('mag_weather_wide.RData')
+} else {
+  mag_weather <- cism::get_weather(station = 'FQMA',
+                                 start_year = 2010,
+                                 end_year = 2017)
+
+  # Rename columns
+  mag_weather <-
+    mag_weather %>%
+    dplyr::select(date, 
+                  temp_max,
+                  temp_mean,
+                  temp_min,
+                  precipitation) %>%
+    rename(temp = temp_mean)
+  # # Keep only Saturdays
+  # mag_weather <-
+  #   mag_weather %>%
+  #   filter(weekdays(date) == 'Saturday') 
+  # Add district
+  mag_weather$district <- 'MAGUDE'
+  
+  # Make mag wide
+  mag_weather_wide <- make_weather_wide(weather = mag_weather,
+                                        remove_before = '2010-01-01',
+                                        go_forward = TRUE)
+  save(mag_weather_wide,
+       file = 'mag_weather_wide.RData')
+}
+
+# Keep only saturdays
+mag_weather_wide <-
+  mag_weather_wide %>%
+  filter(weekdays(date) == 'Saturday')
+
+# Model the outcome
+model_data <-
+  mag_weather_wide %>% left_join(
+      df %>%
+  filter(disease == 'MALARIA',
+         district == 'MAGUDE') %>%
+  group_by(date, province, district) %>%
+  summarise(cases = sum(cases)) %>%
+  ungroup 
+  )
+
+
+model_data <-
+  model_data[,grepl('cases|precip|temp|date', names(model_data))]
+model_data$mda <- model_data$date >= '2015-10-01'
+old_model_data <- model_data
+model_data <- model_data %>% filter(date <= '2016-09-01')
+model_data <- model_data[complete.cases(model_data),]
+dates <- model_data$date; model_data$date <- NULL
+model_data$temp <- model_data$temp_max <-
+  model_data$temp_min <- model_data$precipitation <- NULL
+
+library(randomForest)
+fit <- randomForest(cases ~ ., data = model_data)
+model_data <- old_model_data
+model_data$predicted <- predict(fit, newdata = model_data)
+model_data$predicted[model_data$predicted <0] <- 0
+long <- model_data %>%
+  dplyr::select(date, predicted, cases) %>%
+  gather(key,
+         value,
+         predicted:cases)
+
+```
+
+# Executive summary
+
+A machine learning model (using a "random forest" algorithm), trained on weather data (precipitation, temperature variation) and MDA data (pre/during MALTEM dummy) can predict the number of clinical malaria cases in Magude with a fairly high degree of accuracy.
+
+# Data sources
+
+## Weather 
+
+We use weather from the Maputo airport weather station, obtained through the `get_data` function in the publicly available `cism` package in R.
+
+## Surveillance
+
+We use BES data from the Mozambican Ministry of Health. We have this data on record through the end of 2016.
+
+# Feature generation
+
+Our weather data contain only 4 variables of interest: precipitation, mean temperature, maximum temperature, and minimum temperature. However, we generate lagged and aggregated features for periods of interest. These include the following (hopefully self-explanatory) variables:
+
+```{r}
+sort(unique(names(mag_weather_wide)[7:ncol(mag_weather_wide)]))
+```
+
+We intentionally blind the model to (a) any historical case data, and (b) any weather data in the previous 20 days. Thanks to the latter, we are able to predict 20 days in advance (since the model requires only data greater than 20 days old).
+
+# Methods
+
+We run a random forest regression with all features. Random forest has an advantage over linear regression because (a) it better handles thresholds, (b) it better handles interactions.
+
+# Results
+
+The below plot shows the number of true cases (per BES data) and predicted cases (per the algorithm) over the last 7 years.
+
+```{r}
+g <- ggplot(data = long,
+       aes(x = date,
+           y = value,
+           color = key)) +
+  geom_line(alpha = 0.6) +
+  scale_color_manual(name = '',
+                     values = c('red', 'blue')) +
+  theme_cism() +
+  labs(x = 'Date',
+       y = 'Weekly cases',
+       title = 'Clinical malaria in Magude',
+       subtitle = 'Observed vs. predicted cases')
+g
+```
+
+The below plot is identical to the above, but zoomed in just to the last 9 months. Note that the algorithm correctly predicted both (a) low malaria incidence during the summer, and (b) the recent rise in cases. The model fails at the low end (ie, it often predicts 0 when in reality there are always several cases), but appears to catch peaks appropriately.
+
+Also note that this model is _completely_ blind to data after 2016-09-01. Even wihtout any epi information, it predicts a startling rise in malaria cases in Magude during the month of April and May, which we have observed in reality.
+
+```{r}
+g + 
+  xlim(as.Date(c('2016-10-01', '2017-05-16'))) +
+  geom_point(alpha = 0.6) +
+  labs(title = 'Zoom-in: Clinical malaria in Magude') +
+  ylim(0, 250)
+
+```
+
+The below table shows the the number of predicted and observed cases by week.
+
+```{r}
+DT::datatable(model_data %>%
+                dplyr::select(date, cases, predicted) %>%
+                arrange(desc(date)) %>%
+                filter(!is.na(predicted)) %>%
+                mutate(predicted = round(predicted)))
+```
+
+The below chart shows the predicted and observed cases for each year separately.
+
+```{r}
+model_data <-
+  model_data %>%
+  mutate(day_number = as.numeric(format(date, '%j'))) %>%
+  mutate(year = as.numeric(format(date, '%Y'))) %>%
+  mutate(fake_date = as.Date(paste0('2016-01-01')) + day_number) %>%
+  mutate(blind = ifelse(date <= '2016-09-01', 'in sample', 'out of sample'))
+long <- 
+  model_data %>%
+  dplyr::select(date, 
+                year, 
+                fake_date,
+                predicted,
+                cases) %>%
+  gather(key,
+         value,
+         predicted:cases) %>%
+  mutate(year2 = ifelse(year == 2017, '2017', 'other years'))
+ggplot(data = long,
+       aes(x = fake_date,
+           y = value,
+           color = key)) +
+  geom_line() +
+  facet_wrap(~year) +
+    scale_color_manual(name = '',
+                     values = c('red', 'blue')) +
+  theme_cism() +
+  labs(x = 'Date',
+       y = 'Weekly cases',
+       title = 'Clinical malaria in Magude',
+       subtitle = 'Observed vs. predicted cases') +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+The below chart reflects model accuracy / stability. The model performs fairly well across both low and high incidence periods. The color of each point reflects whether this period was in the training sample or not (ie, we are more concerned about "out of sample" performance than in sample). Note that this does not include any data from 2017.
+
+```{r}
+ggplot(data =model_data,
+       aes(x = predicted,
+           y = cases,
+           color = blind)) +
+  geom_point(alpha = 0.6) +
+  theme_cism() +
+  labs(x = 'Predicted',
+       y = 'Observed',
+       title= 'Model performance: all time',
+       subtitle = 'Magude clinical malaria cases') +
+  scale_color_manual(name = '',
+                     values = c('darkorange', 'darkgreen'))
+```
+
+# Discussion
+
+
+## Take-aways
+
+There is a lot more work to do on this. But this "minimal viable product" goes to show that:
+
+- Weather data is fairly predictive of malaria incidence.
+- Weather data is easily usable.
+- Weather data can be used not only to _describe_, but also to _predict_.
+- Had we implemented a forecasting algorithm earlier, we could have predicted the recent spike in Malaria cases in mid-March (even though incidence was low then). 
+- The model correctly predicted the late April / early May spike.
+- The model predicts that the incidence of malaria will subside slightly in late May and early June, but will remain well above February/April levels.
+
+## Limitations
+
+- The model is still showing weakness in the intervention period (it over-predicts systematically).
+- The model appears to have incorrectly predicted a January 2017 spike; this may be correctable by better incorporation of MDA timing (currently using only a dummy).
+- No concept of confidence-bounding has yet been introduced.
+
+
+

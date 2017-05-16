@@ -4,6 +4,7 @@ library(sp)
 
 # Source helpers
 source('helpers.R')
+source('weather_functions.R')
 
 # If the data has already been processed, simply read it in
 if('mozambican_weather.csv' %in% dir('noaa_data')){
