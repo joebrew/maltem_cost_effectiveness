@@ -246,3 +246,13 @@ Outside data include:
 - `data/outside_data/Projeccoes_distritais_2007_20240`: Ministerio de Saude de Moçambique, Direcção Nacional de Saúde e Pública, Gestor de Dados e Assistente de M&A do Programa Nacional de Controlo da Malária
 - `data/outside_data/surveillance_ministry`: Ministerio de Saude de Moçambique, Direcção Nacional de Saúde e Pública, Gestor de Dados e Assistente de M&A do Programa Nacional de Controlo da Malária
 - `data/outside_data/vector_control_ministry`: Instituto Nacional de Estadística (projections available online)
+
+### Weather data
+
+We retrieved weather data for all stations in Mozambique for the last decade from NOAA (https://www.ncdc.noaa.gov/cdo-web/). The "raw" data consist of the 3 `.txt` files at https://github.com/joebrew/maltem_cost_effectiveness/tree/master/noaa_data.
+
+We estimated the meterological conditions at the centroid of each district to produce `mozambican_weather.csv` (also at the above link). The code for this is estimation is at https://github.com/joebrew/maltem_cost_effectiveness/blob/master/get_weather_data.R. 
+
+The R function `get_weather_for_location` (https://github.com/joebrew/maltem_cost_effectiveness/blob/master/helpers.R#L85) contains the details of the interpolation method used to estimate conditions. This estimation was necessary since the locations of the weather stations do not coincide with the centroids of the districts. 
+
+The method for interpolation was simple. For each district centroid on each date and for each weather indicator (temperature, humidity), etc, a weighted mean of that indicator was calculated from _all_ Mozambican weather stations, with the weight being equivalent to 1 divided by the distance (in kilometers) from the district's centroid to each station. In other words, a station 5 kilometers from a district centroid would get a weight of 1/5 (0.2) whereas a station 100 kilometers from a district centroid would get a weight of 1/100 (0.01). 
