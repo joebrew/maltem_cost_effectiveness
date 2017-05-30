@@ -14,7 +14,8 @@ if('mozambican_weather.csv' %in% dir('noaa_data')){
 } else {
   
   # Read in data
-  a <- read_csv('noaa_data/CDO5060047274390.txt')
+  # a <- read_csv('noaa_data/CDO5060047274390.txt')
+  a <- read_csv('noaa_data/CDO4045907356802.txt')
   counter <- 1
   for (j in 1:ncol(a)){
     if(is.na(names(a)[j])){
@@ -25,7 +26,7 @@ if('mozambican_weather.csv' %in% dir('noaa_data')){
   names(a)[1] <- 'USAF'
   
   # Read in station info
-  b <- read_table('noaa_data/isd-history.txt', skip = 20)
+  b <- read_table('noaa_data/isd-history_may_2017.txt', skip = 20)
   b$USAF <- as.numeric(b$USAF)
   
   # Join
