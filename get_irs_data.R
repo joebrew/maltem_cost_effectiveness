@@ -72,10 +72,8 @@ if('irs_data_cleaned.RData' %in% dir('data/binaries')){
                              ifelse(district == 'C.XAI-XAI', 'XAI-XAI CITY',
                                     ifelse(district == 'D.XAI-XAI',
                                            'XAI-XAI DISTRICT',
-                                           ifelse(district == 'MANJACAZE',
-                                                  'MANDLAKAZI',
                                                   ifelse(district == 'MATUTUÍNE MOZAL', 'MATUTUINE',
-                                                         ifelse(district == 'XINAVANE', 'MANHICA', district)))))))
+                                                         ifelse(district == 'XINAVANE', 'MANHICA', district))))))
   irs <- 
     irs %>%
     mutate(district = ifelse(district == 'MANHIÇA', 'MANHICA',

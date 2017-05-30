@@ -346,6 +346,76 @@ bes <- bes %>%
          !is.na(age_group)) %>%
   mutate(cases = ifelse(is.na(cases), 0, cases)) 
 
+# Read in 2017 data
+# this is a separate process because we got this data later
+# and separately from the other data dumps
+bes17 <- read_excel('data/2017/BES_2017_all_districts.xls')
+
+# Fix the districts to correspond perfectly with the other names
+bes17$Distrito[bes17$Distrito == 'CHOKWÉ'] <- 'CHOKWE'
+bes17$Distrito[bes17$Distrito == 'GUIJÁ'] <- 'GUIJA'
+bes17$Distrito[bes17$Distrito == 'MANHIÇA'] <- 'MANHICA'
+bes17$Distrito[bes17$Distrito == 'MATUTUÌNE'] <- 'MATUTUINE'
+bes17$Distrito[bes17$Distrito == 'MANDLAKAZI'] <- 'MANJACAZE'
+bes17$Distrito[bes17$Distrito == 'CIDADE DE XAI-XAI'] <- 'XAI-XAI CITY'
+bes17$Distrito[bes17$Distrito == 'DISTRITO DE XAI-XAI (EXTINTO)'] <- 'XAI-XAI DISTRICT'
+
+# Keep only those districts which we are tracking
+bes17 <- 
+  bes17 %>%
+  filter(Distrito %in% sort(bes$district))
+
+# Get the province
+bes17 <-
+  bes17 %>%
+  left_join(bes %>%
+              group_by(district) %>%
+              summarise(province = dplyr::first(province)),
+            by = c('Distrito' = 'district'))
+
+# Split years and weeks
+bes17$year <- as.numeric(substr(bes17$Semana, 1, 4))
+bes17$week <- as.numeric(substr(bes17$Semana, 6, nchar(bes17$Semana)))
+
+# Rename some columns
+bes17 <- bes17 %>%
+  rename(`0-4` = `BES - MALÁRIA 0-4 anos, CASOS`,
+         `5+` = `BES - MALÁRIA 5+ anos, CASOS`,
+         district = Distrito) %>%
+# Remove unecessary columns
+  dplyr::select(-`BES - MALÁRIA 0-4 anos, ÓBITOS`, 
+                -`BES - MALÁRIA 5+ anos, ÓBITOS`,
+                -Semana)
+
+# Make long
+bes17 <-
+  bes17 %>%
+  gather(age_group,
+         cases,
+         `0-4`:`5+`)
+
+# Rearrange columns to match the format of of bes
+bes17 <-
+  bes17 %>%
+  mutate(disease = 'MALARIA',
+         has_mb = FALSE,
+         has_sm = TRUE) %>%
+  dplyr::select(year,
+                week,
+                province,
+                district,
+                age_group,
+                disease,
+                has_mb,
+                has_sm,
+                cases)
+
+# Join to old bes
+bes <-
+  bind_rows(bes, 
+            bes17)
+rm(bes17)
+
 # Read in population data
 read_population <- function(sheet = 1,
                             file = 'data/Projeccoes_distritais_2007_20240/Província  Maputo - - Distritos.xls'){
@@ -497,12 +567,11 @@ pop <- pop %>% filter(year >= 2010 &
 
 # Standardize district names
 pop$district[pop$district == 'BILENE MACIA'] <- 'BILENE'
-pop$district[pop$district == 'MANDLACAZE'] <- 'MANDLAKAZI'
+pop$district[pop$district == 'MANDLACAZE'] <- 'MANJACAZE'
 pop$district[pop$district == 'MANHIÇA'] <- 'MANHICA'
 pop$district[pop$district == 'MASSINGIRA'] <- 'MASSINGIR'
 pop$district[pop$district == 'XAI_XAI'] <- 'XAI-XAI CITY'
 pop$district[pop$district == 'XAI-XAI'] <- 'XAI-XAI DISTRICT'
-bes$district[bes$district == 'MANJACAZE'] <- 'MANDLAKAZI'
 
 # Get a date helper for standardizing weekly dates to saturday
 date_helper <- create_date_helper()
@@ -516,9 +585,9 @@ bes <-
 bes$month <- as.numeric(format(bes$date, '%m'))
 bes$day <- as.numeric(format(bes$date, '%d'))
 
-# Keep only through end of 2016
+# Keep only through may 2017
 bes <- bes %>%
-  filter(date <= '2016-12-31')
+  filter(date <= '2017-05-31')
 
 # reorder
 bes <- bes %>%
@@ -545,6 +614,11 @@ bes <- bes %>%
   ungroup %>%
   dplyr::select(-dummy)
 
+# Remove any NAs
+bes <- bes %>%
+  filter(!is.na(cases))
+
+
 # Join population to data
 df  <- bes %>%
   left_join(pop %>% dplyr::select(-province),
@@ -555,7 +629,6 @@ df <-
   df %>%
   mutate(p = cases / population) %>%
   mutate(pk = p * 1000)
-
 
 
 # Remove unecessary objects

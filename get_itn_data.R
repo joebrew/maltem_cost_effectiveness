@@ -21,9 +21,8 @@ itn <- itn %>%
 # Fix names
 itn <-
   itn %>%
-  mutate(district = ifelse(district == 'MANJACAZE', 'MANDLAKAZI',
-                           ifelse(district == 'XAI-XAI', 'XAI-XAI DISTRICT',
-                                  ifelse(district == 'CIDADE DA MATOLA', 'MATOLA', district))))
+  mutate(district = ifelse(district == 'XAI-XAI', 'XAI-XAI DISTRICT',
+                                  ifelse(district == 'CIDADE DA MATOLA', 'MATOLA', district)))
 
 
 # Make monthly

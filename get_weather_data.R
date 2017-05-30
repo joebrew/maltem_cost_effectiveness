@@ -1,3 +1,5 @@
+# https://www7.ncdc.noaa.gov/CDO/cdoselect.cmd?datasetabbv=GSOD&resolution=40
+
 # Packages
 library(tidyverse)
 library(sp)
@@ -158,6 +160,7 @@ if('mozambican_weather.csv' %in% dir('noaa_data')){
   coords$district[coords$district == 'XAI-XAI'] <- 'XAI-XAI DISTRICT'
   coords$district[coords$district == 'MANHIÇA'] <- 'MANHICA'
   coords$district[coords$district == 'MATUTUÍNE'] <- 'MATUTUINE'
+  coords$district[coords$district == 'MANDLAKAZI'] <- 'MANJACAZE'
   
   # Add a row for matola
   matola <- data_frame(x = 32.46580,
