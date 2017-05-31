@@ -346,6 +346,8 @@ bes <- bes %>%
          !is.na(age_group)) %>%
   mutate(cases = ifelse(is.na(cases), 0, cases)) 
 
+# Remove 2017 data
+bes <- bes %>% filter(year <= 2016)
 # Read in 2017 data
 # this is a separate process because we got this data later
 # and separately from the other data dumps
@@ -414,7 +416,6 @@ bes17 <-
 bes <-
   bind_rows(bes, 
             bes17)
-rm(bes17)
 
 # Read in population data
 read_population <- function(sheet = 1,
@@ -765,3 +766,4 @@ rm(district_matcher,
 #   group_by(magude, time) %>%
 #   summarise(cases = sum(cases),
 #             p = mean(p))
+rm(bes17)
