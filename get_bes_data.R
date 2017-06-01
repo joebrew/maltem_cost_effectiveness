@@ -351,7 +351,7 @@ bes <- bes %>% filter(year <= 2016)
 # Read in 2017 data
 # this is a separate process because we got this data later
 # and separately from the other data dumps
-bes17 <- read_excel('data/2017/BES_2017_all_districts.xls')
+bes17 <- read_csv('data/2017/BES_2017_all_districts.csv', skip=1)
 
 # Fix the districts to correspond perfectly with the other names
 bes17$Distrito[bes17$Distrito == 'CHOKWÉ'] <- 'CHOKWE'
