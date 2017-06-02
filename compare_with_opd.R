@@ -1,6 +1,40 @@
 # Get BES data
 source('get_bes_data.R')
 
+# Define date truncation
+date_truncate <- 
+  function (date_object, level = c("month", "quarter", "year")) 
+  {
+    if (is.null(level)) {
+      stop("You must provide a level argument of either \"month\", \"quarter\" or \"year\".")
+    }
+    date_object <- as.Date(date_object)
+    if (sum(!is.na(date_object)) == 0) {
+      return(date_object)
+    }
+    if (level == "month") {
+      return_object <- date_object
+      return_object[!is.na(return_object)] <- as.Date(paste0(format(return_object[!is.na(return_object)], 
+                                                                    "%Y-%m"), "-01"))
+      return(return_object)
+    }
+    if (level == "quarter") {
+      q_month <- (((((as.numeric(format(date_object, "%m"))) - 
+                       1)%/%3) + 1) * 3) - 2
+      return_object <- date_object
+      return_object[!is.na(return_object)] <- as.Date(paste0(format(return_object[!is.na(return_object)], 
+                                                                    "%Y"), ifelse(nchar(q_month[!is.na(return_object)]) == 
+                                                                                    2, "-", "-0"), q_month, "-01"))
+      return(return_object)
+    }
+    if (level == "year") {
+      return_object <- date_object
+      return_object[!is.na(return_object)] <- as.Date(paste0(format(return_object[!is.na(return_object)], 
+                                                                    "%Y"), "-01-01"))
+      return(return_object)
+    }
+  }
+
 # Get a date helper for standardizing dates
 wh <- create_date_helper()
 wh$month <- as.numeric(format(wh$date, '%m'))
@@ -111,7 +145,7 @@ x <-
   opd %>%
   filter(!is.na(date)) %>%
   mutate(date >= as.Date('2010-01-01')) %>%
-  mutate(year_month = lendable::date_truncate(date, 'month')) %>%
+  mutate(year_month = date_truncate(date, 'month')) %>%
   mutate(month = as.numeric(format(date, '%m'))) %>%
   filter(place == 'Ilha Josinha') %>%
   mutate(age_group = ifelse(age < 12, '0-0.99',
