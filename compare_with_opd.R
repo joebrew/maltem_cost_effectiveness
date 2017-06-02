@@ -1,5 +1,5 @@
 # Get BES data
-source('get_bes_data.R')
+source('get_bes_data.R', encoding = "UTF-8")
 
 # Define date truncation
 date_truncate <- 
