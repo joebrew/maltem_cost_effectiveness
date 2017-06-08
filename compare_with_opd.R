@@ -1,3 +1,4 @@
+library(cism)
 # Get BES data
 source('get_bes_data.R')
 
@@ -139,6 +140,40 @@ g1
 ggsave('~/Desktop/magude.png')
 g2
 ggsave('~/Desktop/manhica.png')
+
+# Comparison manhica
+x <- 
+  comparison_manhica %>%
+  ungroup %>%
+  group_by(district, source) %>%
+  mutate(avg = mean(cases)) %>%
+  ungroup %>%
+  mutate(y = cases / avg * 100)
+ggplot(data = x,
+       aes(x = date,
+           y = y, 
+           color = source)) +
+  geom_line(alpha = 0.8) +
+  labs(title = 'Manhica: 0-4 only',
+       subtitle = 'Percentage of total period average',
+       x = 'Date',
+       y = 'Percent') +
+  theme_cism() +
+  scale_color_manual(name = 'Source',
+                     values = c('darkgreen', 'darkorange'))
+y <- spread(x %>%
+              dplyr::select(date, source, cases) %>%
+              filter(!duplicated(paste0(date, source))),
+           key = source,
+           value = cases)
+z <- y %>% filter(!is.na(OPD),
+                  !is.na(BES))
+cor(z$OPD, z$BES)
+ggplot(data = z, aes(x = OPD, y = BES)) +
+  geom_point() +
+  labs(title = 'Manhica: 0-4 only',
+       subtitle = 'Correlation in number of cases') +
+  theme_cism() 
 
 # GET incidence in ij
 x <- 
