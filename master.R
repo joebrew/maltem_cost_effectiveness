@@ -83,7 +83,29 @@ df <-
 df_young <-df %>% filter(age_group == '0-4')
 df_old <- df %>% filter(age_group == '5+')
 
+# Make an aggregated/pooled dataset
+df_agg <- df %>%
+  group_by(year, week, date, month, day,
+           province, district, disease) %>%
+  summarise(x = n(),
+            cases = sum(cases),
+            population = sum(population),
+            itn_coverage = first(itn_coverage),
+            irs_houses = first(irs_houses),
+            irs_people = first(irs_people),
+            weeks_since_last_irs_campaign_end = first(weeks_since_last_irs_campaign_end),
+            irs_coverage_houses = first(irs_coverage_houses),
+            irs_coverage_people = first(irs_coverage_people),
+            precipitation = first(precipitation),
+            temp = first(temp),
+            temp_max = first(temp_max),
+            temp_min = first(temp_min),
+            dew_point = first(dew_point),
+            wind_speed = first(wind_speed),
+            wind_speed_max = first(wind_speed_max))
+
 # # Write data for sharing with collaborators
+write_csv(df_agg, 'data/outputs/cases_population_weather_itn_irs_pooled_age_groups.csv')
 # write_csv(df_young, 'data/outputs/cases_population_weather_itn_irs_young_only.csv')
 # write_csv(df_old, 'data/outputs/cases_population_weather_itn_irs_old_only.csv')
 # 
@@ -107,6 +129,43 @@ df_old <- df %>% filter(age_group == '5+')
 # write_csv(df_wide, 'data/outputs/cases_population_weather_wide_itn_irs.csv')
 
 
+# x <-  df %>%
+#   filter(district %in% c('CHIGUBO',
+#                          'MOAMBA',
+#                          'MASSANGENA',
+#                          'MAGUDE'),
+#          disease == 'MALARIA') 
+# # Plot each district
+# g1 <-ggplot(data = x,
+#             aes(x = date,
+#                 y = pk)) +
+#   geom_line(alpha = 0.6) +
+#   # geom_point(aes(size = population),
+#   #            alpha = 0.3) +
+#   facet_wrap(district ~ age_group, ncol = 4) +
+#   xlim(as.Date(c('2010-01-01', Inf))) +
+#   labs(x = 'Date',
+#        y = 'Cases per 1,000',
+#        title = 'Some districts',
+#        subtitle = 'Zoom-in')
+# g2 <-ggplot(data = x,
+#        aes(x = date,
+#            y = pk)) +
+#   geom_line(alpha = 0.6) +
+#   # geom_point(aes(size = population),
+#   #            alpha = 0.3) +
+#   facet_wrap(district ~ age_group, ncol = 4) +
+#   xlim(as.Date(c('2015-01-01', Inf))) +
+#   labs(x = 'Date',
+#        y = 'Cases per 1,000',
+#        title = 'Some districts',
+#        subtitle = 'Zoom-in') +
+#   theme(axis.text.x = element_text(angle = 90))
+# 
+# ggsave('~/Desktop/g1.pdf', g1)
+# ggsave('~/Desktop/g2.pdf', g2)
+# g1
+# g2
 # # Make a plot of Magude over time
 # x <- df %>%
 #   filter(district == 'MAGUDE') %>%
