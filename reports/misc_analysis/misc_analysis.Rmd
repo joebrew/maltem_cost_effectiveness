@@ -1,0 +1,433 @@
+---
+title: "MALTEM effectiveness analysis"
+author: "Brew, Cirera, Sicuri, Thomas"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+fig_height: 2.6
+fig_width: 4
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+---
+
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, comment = NA, error= FALSE, cache = F}
+# No scientific notation
+options(scipen=999)
+
+# Packages 
+library(databrew)
+library(cism)
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(gsheet)
+library(readr)
+
+# Options for this document (ie, whether to show code, errors, etc.)
+knitr::opts_chunk$set(comment = NA, 
+               echo = FALSE,
+               eval = TRUE,
+               warning = FALSE, 
+               message = FALSE, 
+               error = TRUE, 
+               cache = FALSE)
+```
+
+```{r}
+# Read in wide weather data
+# source('../../weather_functions.R', chdir = TRUE)
+source('../../master.R', chdir = TRUE)
+
+# Define a theme
+theme_maltem <- ggthemes::theme_hc
+```
+
+# Visual overview
+
+```{r}
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  group_by(date, district) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+ggplot(data = x,
+       aes(x = date,
+           y = p)) +
+  geom_line(alpha = 0.8,
+            color = 'darkred') +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  labs(x = 'Date',
+       y = 'Weekly cases per 1,000') +
+  scale_color_manual(name = 'District',
+                     values = c('red', 'black')) +
+  labs(title = 'Weekly incidence: all districts',
+       subtitle = 'All age groups') +
+  theme_maltem() +
+  facet_wrap(~district) +
+  theme(legend.position="none") +
+  theme(strip.background = element_rect(fill="white"),
+        strip.text = element_text(color = grey(0.1), size = 6)) +
+  theme(axis.text.x = element_text(angle = 90))
+
+
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  group_by(date, age_group, district) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+ggplot(data = x,
+       aes(x = date,
+           y = p,
+           group = age_group,
+           color = age_group)) +
+  geom_line(alpha = 0.8) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  labs(x = 'Date',
+       y = 'Weekly cases per 1,000') +
+  scale_color_manual(name = 'District',
+                     values = c('darkorange', 'darkgreen')) +
+  labs(title = 'Weekly incidence: all districts',
+       subtitle = 'Segregated by age group') +
+  theme_maltem() +
+  facet_wrap(~district) +
+  # theme(legend.position="none") +
+  theme(strip.background = element_rect(fill="white"),
+        strip.text = element_text(color = grey(0.1), size = 6)) +
+  theme(axis.text.x = element_text(angle = 90))
+
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  group_by(date, place) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+ggplot(data = x,
+       aes(x = date,
+           y = p,
+           group = place)) +
+  geom_line(aes(color = place), alpha = 0.8) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  labs(x = 'Date',
+       y = 'Weekly cases per 1,000') +
+  scale_color_manual(name = 'District',
+                     values = c('red', 'black')) +
+  labs(title = 'Weekly incidence: Magude vs. other districts',
+       subtitle = 'All age groups') +
+  theme_maltem()
+
+
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  group_by(date, place, age_group) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+ggplot(data = x,
+       aes(x = date,
+           y = p,
+           group = place)) +
+  geom_line(aes(color = place), alpha = 0.8) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  labs(x = 'Date',
+       y = 'Weekly cases per 1,000') +
+  scale_color_manual(name = 'District',
+                     values = c('red', 'black')) +
+  labs(title = 'Weekly incidence: Magude vs. other districts',
+       subtitle = 'Segregated by age group') +
+  theme_maltem() +
+  facet_wrap(~age_group)
+```
+
+# When did the decline begin in Magude?
+
+```{r}
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  group_by(date, place) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+ggplot(data = x,
+       aes(x = date,
+           y = p,
+           group = place)) +
+  geom_line(aes(color = place), alpha = 0.8) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  labs(x = 'Date',
+       y = 'Weekly cases per 1,000') +
+  scale_color_manual(name = 'District',
+                     values = c('red', 'black')) +
+  labs(title = 'Weekly incidence: Magude vs. other districts',
+       subtitle = 'All age groups, zoom-in') +
+  theme_maltem() +
+  xlim(as.Date('2013-01-01'), max(x$date))
+
+
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  mutate(date = as.Date(paste0(year, '-', month, '-01'))) %>%
+  group_by(date, place) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+ggplot(data = x,
+       aes(x = date,
+           y = p,
+           group = place)) +
+  geom_line(aes(color = place), alpha = 0.8) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  labs(x = 'Date',
+       y = 'Monthly cases per 1,000') +
+  scale_color_manual(name = 'District',
+                     values = c('red', 'black')) +
+  labs(title = 'Monthly incidence: Magude vs. other districts',
+       subtitle = 'All age groups, zoom-in') +
+  theme_maltem() +
+  xlim(as.Date('2013-01-01'), max(x$date))
+
+
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  mutate(date = as.Date(paste0(year, '-', month, '-01'))) %>%
+  group_by(date, place) %>%
+  summarise(p = sum(cases) / sum(population) * 1000) %>%
+  group_by(date) %>%
+  summarise(magude_to_other = p[place == 'Magude'] / 
+              p[place == 'Other districts'] * 100)
+
+g <- ggplot(data = x,
+       aes(x = date,
+           y = magude_to_other)) +
+  geom_line(alpha = 0.8) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  geom_hline(yintercept = 100,
+             col = 'darkred',
+             alpha = 0.6,
+             lty = 2) +
+  labs(x = 'Date',
+       y = 'Percent') +
+  labs(title = 'Monthly incidence: Magude as % of other districts',
+       subtitle = 'All age groups') +
+  theme_maltem()
+
+g + xlim(as.Date('2013-01-01'), max(x$date))
+
+```
+
+# Magude vs. Manhiça
+
+```{r}
+
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  filter(district %in% c('MAGUDE', 'MANHICA')) %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  
+                        ifelse(district == 'MANHICA', 'Manhiça', NA))) %>%
+  mutate(date = as.Date(paste0(year, '-', month, '-01'))) %>%
+  group_by(date, place) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+ggplot(data = x,
+       aes(x = date,
+           y = p,
+           group = place)) +
+  geom_line(aes(color = place), alpha = 0.8) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  labs(x = 'Date',
+       y = 'Monthly cases per 1,000') +
+  scale_color_manual(name = 'District',
+                     values = c('red', 'black')) +
+  labs(title = 'Monthly incidence: Magude vs. Manhiça',
+       subtitle = 'All age groups, zoom-in') +
+  theme_maltem() +
+  xlim(as.Date('2013-01-01'), max(x$date))
+
+```
+
+# Weather
+
+## Precipitation
+
+```{r}
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  mutate(place = factor(place, levels = c('Other districts', 'Magude'))) %>%
+  mutate(date = as.Date(paste0(year, '-', month, '-01'))) %>%
+  group_by(date, district, place) %>%
+  summarise(precipitation = mean(precipitation),
+            temp = mean(temp),
+            temp_max = max(temp_max),
+            temp_min = min(temp_min))
+
+g <- ggplot() +
+  geom_line(alpha = 0.2,
+            data = x %>% filter(place == 'Other districts'),
+       aes(x = date,
+           y = precipitation,
+           group = district)) +
+    geom_line(alpha = 0.8,
+              color = 'darkred',
+            data = x %>% filter(place == 'Magude'),
+       aes(x = date,
+           y = precipitation,
+           group = district)) +
+  labs(x = 'Date',
+       y = 'Milimeters',
+       title = 'Precipitation: Magude vs. other districts',
+       subtitle = 'Monthly average precipitation, Magude in red') +
+  theme_maltem()
+g 
+g + 
+  xlim(as.Date('2014-01-01'),
+               max(x$date)) +
+  labs(title = 'Zoom-in of above chart')
+
+y <- x %>%
+  group_by(date) %>%
+  summarise(magude_to_other = mean(precipitation[district == 'MAGUDE']) / 
+              mean(precipitation[district != 'MAGUDE']) * 100)
+g <- 
+  ggplot(data = y,
+       aes(x = date,
+           y = magude_to_other)) +
+  geom_line(alpha = 0.8) +
+  theme_maltem() +
+  labs(x = 'Date',
+       y = 'Percent',
+       title = 'Average monthly precipitation: Magude vs other',
+       subtitle = 'Magude as percentage of monthly mean') +
+  geom_hline(yintercept = 100,
+             color = 'darkred',
+             lty = 2,
+             alpha = 0.7) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3)
+g
+g + 
+  xlim(as.Date('2014-01-01'),
+               max(x$date)) +
+  labs(title = 'Zoom-in of above chart')
+```
+
+## Temperature
+
+```{r}
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  mutate(place = factor(place, levels = c('Other districts', 'Magude'))) %>%
+  mutate(date = as.Date(paste0(year, '-', month, '-01'))) %>%
+  group_by(date, district, place) %>%
+  summarise(precipitation = mean(precipitation),
+            temp = mean(temp),
+            temp_max = max(temp_max),
+            temp_min = min(temp_min))
+
+ggplot() +
+  geom_line(alpha = 0.2,
+            data = x %>% filter(place == 'Other districts'),
+       aes(x = date,
+           y = temp,
+           group = district)) +
+    geom_line(alpha = 0.8,
+              color = 'darkred',
+            data = x %>% filter(place == 'Magude'),
+       aes(x = date,
+           y = temp,
+           group = district)) +
+  labs(x = 'Date',
+       y = 'Degrees (celcius)',
+       title = 'Average temperature: Magude vs. other districts',
+       subtitle = 'Monthly average, Magude in red') +
+  theme_maltem() +
+  xlim(as.Date('2014-01-01'),
+               max(x$date))
+```
+
+## Is seasonality constant by year?
+
+```{r}
+x <- 
+  df %>%
+  group_by(year, month) %>%
+  summarise(p = sum(cases) / sum(population) * 1000) %>%
+  ungroup %>%
+  mutate(year = factor(year))
+
+cols <- colorRampPalette(RColorBrewer::brewer.pal(n = 9, 'Spectral'))(length(unique(x$year)))
+ggplot(data = x,
+       aes(x = month,
+           y = p,
+           group = year,
+           color = year)) +
+  geom_line() +
+  geom_point() +
+  scale_color_manual(name = 'Year',
+                     values = cols) +
+  labs(x = 'Month',
+       y = 'Average incidence',
+       title = 'Incidence by month, all districts',
+       subtitle = 'Wide variability in monthly incidence') +
+  theme_maltem()
+```
+
+## Does 4 week long-and-lagged precipitation predict incidence?
+
+Yes, but not in the way we'd expect. When we adjust for the fixed effect of month, we get a negative correlation between lagged precipitation and incidence.
+
+```{r}
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  filter(date <= '2015-06-01') %>%
+  mutate(year_month = as.Date(paste0(year, '-', month, '-01'))) %>%
+  arrange(date) %>%
+  group_by(district) %>%
+  mutate(lag4 = lag(precipitation, n = 4, default = NA),
+            lag5 = lag(precipitation, n = 5, default = NA),
+            lag6 = lag(precipitation, n = 6, default = NA),
+            lag7 = lag(precipitation, n = 7, default = NA)) %>%
+  mutate(p = sum(cases) / sum(population) * 1000) %>%
+  mutate(n_nas = ifelse(is.na(lag4), 1, 0) + 
+           ifelse(is.na(lag5), 1, 0) + 
+           ifelse(is.na(lag6), 1, 0) + 
+           ifelse(is.na(lag7), 1, 0)) %>%
+  mutate(n_ok = 4 - n_nas) %>%
+  mutate(precipitation_lagged = ifelse(is.na(lag4), 0, lag4) +
+           ifelse(is.na(lag5), 0, lag5) +
+           ifelse(is.na(lag6), 0, lag6) +
+           ifelse(is.na(lag7), 0, lag7) / 
+           n_ok) %>%
+  filter(!is.na(precipitation_lagged),
+         !is.na(p))
+
+fit <- lm(p ~ precipitation_lagged + 
+            factor(month), data = x)
+broom::tidy(fit)
+```
+
+# Proximity to South Africa
+
+# Questions
+
+1. What are the mathematics of the method by which we assign weights to synthetic control districts? Are we concerned that so few districts get any weight?
