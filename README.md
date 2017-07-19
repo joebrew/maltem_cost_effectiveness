@@ -236,6 +236,8 @@ Running `master.R` produces a data.frame named `df`, which is the tabular equiva
 - `dew_point`: The average dew point of the week in question, in celcius.  
 - `wind_speed`: The average wind speed of the week in question, in miles per hour.  
 - `wind_speed_max`: The maximum wind speed of the week in question, in miles per hour.  
+- `irs_protection`: The level at which the population is estimated to be protected from IRS. This is a function of both (a) the coverage % of the last campaign and (b) the time since the last campaign.
+- `distance_to_land_border`: The number of kilometers from the centroid of the district to the nearest border with either Swaziland or South Africa (as the bird flies / euclidean).
 
 ## Data sources
 

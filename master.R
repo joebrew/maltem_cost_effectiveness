@@ -67,17 +67,76 @@ irs <- irs %>%
                 irs_coverage_houses,
                 irs_coverage_people)
 
+# Get which number irs campaign
+cum_summer <- function(x){
+  x[is.na(x)] <-0
+  cumsum(x)
+}
+irs <- irs %>%
+  arrange(district, year, week) %>%
+  mutate(dummy = ifelse(weeks_since_last_irs_campaign_end == 1, 1, 0)) %>%
+  group_by(district) %>%
+  mutate(irs_campaign = cum_summer(dummy))  %>%
+  mutate(irs_campaign = ifelse(weeks_since_last_irs_campaign_end == 0, 
+                               irs_campaign + 1,
+                               irs_campaign))
+
+# Create a protection variable based on decline
+irs <- irs %>%
+  mutate(irs_protection = irs_protect(weeks_since_last_irs_campaign_end) * irs_coverage_people) %>%
+  mutate(irs_protection = ifelse(irs_protection < 0, 0,
+                                 ifelse(irs_protection > 100, 100,
+                                        irs_protection))) %>%
+  mutate(irs_protection = ifelse(is.na(irs_protection), 0, irs_protection))
+
+# Remove unecessary variables
+irs <- irs %>%
+  dplyr::select(-dummy, -irs_campaign)
+
+# # During an IRS campaign increase protection linearly (not working yet)
+# x <-
+#   irs %>%
+#   # filter(!is.na(irs_campaign)) %>%
+#   arrange(year, week) %>%
+#   group_by(district, irs_campaign) %>%
+#   mutate(irs_protection = ifelse(is.na(irs_protection),
+#                                  dplyr::first(irs_protection[!is.na(irs_protection)]),
+#                                  irs_protection)) %>%
+#   mutate(irs_protection_campaign_start = dplyr::first(irs_protection[weeks_since_last_irs_campaign_end == 0]),
+#          irs_portection_campaign_end = dplyr::first(irs_protection[weeks_since_last_irs_campaign_end == 1])) %>%
+#   mutate(irs_protection_campaign_weeks = length(which(weeks_since_last_irs_campaign_end == 0))) %>%
+#   mutate(irs_protection_increase = irs_portection_campaign_end - irs_protection_campaign_start) %>%
+#   mutate(irs_protection_increase = ifelse(irs_protection_increase < 0,
+#                                           0, 
+#                                           irs_protection_increase)) %>%
+#   mutate(irs_protection_weekly_increase = irs_protection_increase / irs_protection_campaign_weeks) %>%
+#   group_by(district, irs_campaign) %>%
+#   mutate(x = irs_protection_campaign_start + cumsum(irs_protection_weekly_increase))
+
 # Join irs data to df (bes + population + itn)
 df <-
   left_join(x = df,
             y = irs,
-            by = c("year", "week", "province", "district"))
+            by = c("year", "week", "province", "district")) 
 
 # Join df (bes + population) to weather
 df <-		
   left_join(x = df,		
             y = weather_weekly,		
             by = c('district', 'date'))
+
+# Make irs NAs be 0
+df <- df %>%
+  mutate(irs_protection = ifelse(is.na(irs_protection),
+                                 0,
+                                 irs_protection)) 
+
+# Get distance to south africa
+source('get_distance_to_border.R')
+df <- 
+  left_join(x = df,
+            y = distances_to_border,
+            by = 'district')
 
 # Make an older and younger dataset
 df_young <-df %>% filter(age_group == '0-4')
@@ -96,30 +155,31 @@ df_agg <- df %>%
             weeks_since_last_irs_campaign_end = first(weeks_since_last_irs_campaign_end),
             irs_coverage_houses = first(irs_coverage_houses),
             irs_coverage_people = first(irs_coverage_people),
+            irs_protection = first(irs_protection),
             precipitation = first(precipitation),
             temp = first(temp),
             temp_max = first(temp_max),
             temp_min = first(temp_min),
             dew_point = first(dew_point),
             wind_speed = first(wind_speed),
-            wind_speed_max = first(wind_speed_max))
+            wind_speed_max = first(wind_speed_max),
+            distance_to_land_border = first(distance_to_land_border))
 
 # # Write data for sharing with collaborators
 write_csv(df_agg, 'data/outputs/cases_population_weather_itn_irs_pooled_age_groups.csv')
-# write_csv(df_young, 'data/outputs/cases_population_weather_itn_irs_young_only.csv')
-# write_csv(df_old, 'data/outputs/cases_population_weather_itn_irs_old_only.csv')
-# 
-# write_csv(df, 'data/outputs/cases_population_weather_itn_irs.csv')
-# write_csv(bes, 'data/outputs/cases_only.csv')
-# write_csv(pop, 'data/outputs/population.csv')
-# # Write csv for weather data
-# write_csv(weather_weekly, 'data/outputs/weather_weekly.csv')
-# write_csv(weather, 'data/outputs/weather_daily.csv')
-# # write_csv(wide_weather, 'data/outputs/weather_wide.csv')
-# # Write csv for itn data
-# write_csv(itn, 'data/outputs/itn.csv')
-# # Write csv for irs data
-# write_csv(irs, 'data/outputs/irs.csv')
+write_csv(df_young, 'data/outputs/cases_population_weather_itn_irs_young_only.csv')
+write_csv(df_old, 'data/outputs/cases_population_weather_itn_irs_old_only.csv')
+write_csv(df, 'data/outputs/cases_population_weather_itn_irs.csv')
+write_csv(bes, 'data/outputs/cases_only.csv')
+write_csv(pop, 'data/outputs/population.csv')
+# Write csv for weather data
+write_csv(weather_weekly, 'data/outputs/weather_weekly.csv')
+write_csv(weather, 'data/outputs/weather_daily.csv')
+# write_csv(wide_weather, 'data/outputs/weather_wide.csv')
+# Write csv for itn data
+write_csv(itn, 'data/outputs/itn.csv')
+# Write csv for irs data
+write_csv(irs, 'data/outputs/irs.csv')
 
 # # Join with wide weather
 # df_wide <- 
@@ -128,218 +188,13 @@ write_csv(df_agg, 'data/outputs/cases_population_weather_itn_irs_pooled_age_grou
 # # Write wide weather too
 # write_csv(df_wide, 'data/outputs/cases_population_weather_wide_itn_irs.csv')
 
-
-# x <-  df %>%
-#   filter(district %in% c('CHIGUBO',
-#                          'MOAMBA',
-#                          'MASSANGENA',
-#                          'MAGUDE'),
-#          disease == 'MALARIA') 
-# # Plot each district
-# g1 <-ggplot(data = x,
-#             aes(x = date,
-#                 y = pk)) +
-#   geom_line(alpha = 0.6) +
-#   # geom_point(aes(size = population),
-#   #            alpha = 0.3) +
-#   facet_wrap(district ~ age_group, ncol = 4) +
-#   xlim(as.Date(c('2010-01-01', Inf))) +
-#   labs(x = 'Date',
-#        y = 'Cases per 1,000',
-#        title = 'Some districts',
-#        subtitle = 'Zoom-in')
-# g2 <-ggplot(data = x,
+# ggplot(data = df_agg,
 #        aes(x = date,
-#            y = pk)) +
-#   geom_line(alpha = 0.6) +
-#   # geom_point(aes(size = population),
-#   #            alpha = 0.3) +
-#   facet_wrap(district ~ age_group, ncol = 4) +
-#   xlim(as.Date(c('2015-01-01', Inf))) +
-#   labs(x = 'Date',
-#        y = 'Cases per 1,000',
-#        title = 'Some districts',
-#        subtitle = 'Zoom-in') +
-#   theme(axis.text.x = element_text(angle = 90))
-# 
-# ggsave('~/Desktop/g1.pdf', g1)
-# ggsave('~/Desktop/g2.pdf', g2)
-# g1
-# g2
-# # Make a plot of Magude over time
-# x <- df %>%
-#   filter(district == 'MAGUDE') %>%
-#   group_by(date, disease) %>% 
-#   summarise(cases = sum(cases),
-#             population = sum(population)) %>%
-#   ungroup %>%
-#   mutate(k = cases / population * 1000)
-# 
-# library(cism)
-# ggplot(data = x %>%
-#          filter(disease == 'MALARIA'),
-#        aes(x = date,
-#            y = k)) +
-#   # geom_point() +
-#   geom_line(color = 'darkorange',
-#             alpha = 0.8) +
-#   theme_cism() +
-#   labs(x = 'Date',
-#        y = 'Weekly incidence per 1,000',
-#        title = 'Malaria cases',
-#        subtitle = 'Magude, Mozambique')
-# 
-# 
-# # Currency
-# owd <- getwd()
-# setwd('../lendable/app')
-# library(lendable)
-# mzn <- fetch_db(query = "SELECT * FROM currency WHERE currency_type ='MZN'")
-# setwd(owd)
-# # Get to value of mzn
-# mzn$mzn <- 1/ mzn$usd 
-# mzn <- mzn %>%
-#   filter(date >= as.Date('2010-01-01'),
-#          mzn <= 0.15)
-# ggplot(data = mzn,
-#        aes(x = date,
-#            y = mzn)) +
-#   geom_line(color = 'darkorange',
-#             alpha = 0.8) +
-#   labs(x = 'Date',
-#        y = '?',
-#        title = 'Huge reduction',
-#        subtitle = 'Thanks, MALTEM!') +
-#   theme_cism() 
-# 
-# # Map of gaza and maputo
-# gm <- cism::moz1_fortified %>%
-#   filter(id %in% c('Maputo', 'Gaza'))
-# ggplot() +
-#   geom_polygon(data = gm,
-#                aes(x = long,
-#                    y = lat,
-#                    group = group,
-#                    fill = id),
-#                alpha = 0.7) +
-#   geom_polygon(data = mag3_fortified,
-#                aes(x = long,
-#                    y = lat,
-#                    group = group),
-#                fill = 'red') +
-#   theme_cism_map() +
-#   coord_map() +
-#   scale_fill_manual(name = '',
-#                     values = c('black', 'grey'))
-# 
-# # Create model
-# model_data <- df %>%
-#   filter(district == 'MAGUDE',
-#          disease == 'MALARIA') %>%
-#   group_by(date, disease) %>% 
-#   summarise(cases = sum(cases),
-#             population = sum(population)) %>%
-#   ungroup %>%
-#   mutate(k = cases / population * 1000) %>%
-#   mutate(month = format(date, '%B'))
-# fit <- lm(k ~ month + date, data = model_data %>% filter(date <= '2015-06-01'))
-# model_data$predicted <- predict(fit, model_data)
-# model_data <- model_data %>%
-#   dplyr::select(date, k, predicted) %>%
-#   rename(observed = k)
-# # make long
-# long <- model_data %>%
-#   gather(key,
-#          value,
-#          observed:predicted)
-# 
-# ggplot(data = long,
-#        aes(x = date,
-#            y = value,
-#            color = key)) +
-#   geom_line(size = 1.5,
-#             alpha = 0.8) +
-#   scale_y_sqrt() +
-#   theme_cism() +
-#   scale_color_manual(name = '',
-#                      values = c('darkgreen', 'darkorange')) +
-#   geom_hline(yintercept = 0) +
-#   labs(x = 'Date',
-#        y = 'Cases (scale: sqrt)',
-#        title = 'Observed vs. predicted',
-#        subtitle = 'Predicted = no MALTEM ')
-
-
-
-# 
-# 
-# library(cism)
-# ggplot(data = df,
-#        aes(x = date,
-#            y = precipitation)) +
-#   geom_line(alpha = 0.8,
-#             color = 'darkgreen') +
+#            y = irs_protection)) +
+#   geom_line(color = 'darkred',
+#             alpha = 0.6) +
 #   facet_wrap(~district) +
 #   labs(x = 'Date',
-#        y = 'Milimeters',
-#        title = 'Rainfall',
-#        subtitle = 'Province of Maputo') +
-#   theme_cism()
-# 
-# 
-# cols <- colorRampPalette(brewer.pal(n = 9, 'Spectral'))(length(unique(df$year)))
-# ggplot(data = df %>%
-#          mutate(day_of_year = as.numeric(format(date, '%j'))),
-#        aes(x = day_of_year,
-#            y = precipitation)) +
-#   geom_line(alpha = 0.8,
-#             aes(color = factor(year))) +
-#   facet_wrap(~district) +
-#   labs(x = 'Day of year',
-#        y = 'Milimeters',
-#        title = 'Rainfall',
-#        subtitle = 'Province of Maputo') +
-#   theme_bw() +
-#   scale_color_manual(name = 'Year',
-#                      values = cols)
-# 
-# 
-# # IRS coverage
-# x <- df %>%
-#   group_by(district, year) %>%
-#   summarise(irs_coverage = first(irs_coverage))
-# 
-# ggplot(data = x,
-#        aes(x = year, 
-#            y = irs_coverage)) +
-#   geom_bar(stat = 'identity',
-#            pos = 'dodge',
-#            fill = 'darkorange', alpha = 0.6) +
-#   facet_wrap(~district) +
-#   theme_cism() +
-#   xlab('Year') +
-#   ylab('IRS coverage (%) of population') +
-#   geom_label(aes(label = paste0(round(irs_coverage, digits = 1), '%')),
-#              size = 3,
-#              alpha = 0.6) +
-#   labs(title = 'IRS coverage in Maputo province by district',
-#        subtitle = 'Number of people considered protected as % of total population')
-
-# # Plot malaria risk
-# ggplot(data = df,
-#        aes(x = date,
-#            y = malaria_risk)) +
-#   geom_line(alpha = 0.3) +
-#   facet_wrap(~district) +
-#   xlab('Date') +
-#   ylab('Malaria risk') +
-#   ggtitle('Estimated climatological risk of malaria',
-#           'By district') +
-#   geom_line(data = df %>%
-#               group_by(district) %>%
-#               mutate(p = p / max(p)) %>%
-#               ungroup,
-#             aes(x = date,
-#                 y = p),
-#             color = 'red',
-#             alpha = 0.5)
+#        y = 'Protection score',
+#        title = 'IRS protection by district') +
+#   ggthemes::theme_hc()

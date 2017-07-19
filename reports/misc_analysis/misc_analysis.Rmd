@@ -423,11 +423,298 @@ x <- df %>%
 
 fit <- lm(p ~ precipitation_lagged + 
             factor(month), data = x)
-broom::tidy(fit)
+DT::datatable(broom::tidy(fit))
 ```
 
 # Proximity to South Africa
 
+We calculate the distance from the centroid of each district to the South African border.
+
+
+```{r}
+# Interpolate for our locations
+library(sp)
+x <- cism::moz2
+x <- x[x@data$NAME_1 %in% c('Maputo', 'Gaza'),]
+coords <- data.frame(coordinates(x))
+names(coords) <- c('x', 'y')
+coords$district <- x@data$NAME_2
+
+# Standardize names
+coords$district <- toupper(coords$district)
+coords$district[coords$district == 'CHÓKWÈ'] <- 'CHOKWE'
+coords$district[coords$district == 'GUIJÁ'] <- 'GUIJA'
+coords$district[coords$district == 'XAI-XAI'] <- 'XAI-XAI DISTRICT'
+coords$district[coords$district == 'MANHIÇA'] <- 'MANHICA'
+coords$district[coords$district == 'MATUTUÍNE'] <- 'MATUTUINE'
+coords$district[coords$district == 'MANDLAKAZI'] <- 'MANJACAZE'
+
+# Add a row for matola
+matola <- data_frame(x = 32.46580,
+                     y = -25.92391,
+                     district = 'MATOLA')
+coords <- bind_rows(coords, 
+                    matola)
+# Add a row for xai-xai city
+xxc <- coords %>% filter(district == 'XAI-XAI DISTRICT') %>%
+  mutate(district = 'XAI-XAI CITY')
+coords <- bind_rows(coords,
+                    xxc)
+# Make spatial
+coords <- coords %>%
+  mutate(lng = x,
+         lat = y)
+coordinates(coords) <- ~x+y
+proj4string(coords) <- proj4string(moz3)
+
+# Get South Africa
+sa <- cism::africa
+sa <- sa[sa@data$COUNTRY == 'South Africa',]
+
+# Get projected versions
+sa_proj <- spTransform(sa,
+                    CRS("+init=epsg:3347"))
+coords_proj <- spTransform(coords,
+                    CRS("+init=epsg:3347"))
+
+# Get distance to south Africa
+coords@data$distance_to_south_africa <- NA
+for (i in 1:nrow(coords)){
+  this_distance <- rgeos::gDistance(coords_proj[i,], sa_proj)
+  coords@data$distance_to_south_africa[i] <- this_distance / 10000
+}
+
+afr <- cism::africa
+afr <- afr[afr@data$COUNTRY %in% c('South Africa', 'Mozambique'),]
+plot(afr, col = adjustcolor(c('blue', 'green'), alpha.f = 0.3))
+points(coords, col = 'red',
+       pch = '.',
+       cex = 2)
+```
+
+The distances can be seen in the below table.
+
+```{r}
+DT::datatable(coords@data %>% dplyr::select(district, distance_to_south_africa) %>%
+                mutate(distance_to_south_africa = round(distance_to_south_africa, digits = 2)) %>%
+  rename(District = district,
+         KM = distance_to_south_africa)) 
+```
+
+Visually, we assess the hypothesis that the decline over time is steeper for those districts bordering South Africa through a series of charts.
+
+```{r}
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  left_join(coords@data) %>%
+  group_by(district, year, distance_to_south_africa) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+ggplot(data = x,
+       aes(x = distance_to_south_africa,
+           y = p)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(n = 5, span = 10, se = FALSE,
+              color = 'darkred',
+              alpha = 0.5,
+              lty = 1) +
+  facet_wrap(~year) +
+  theme_maltem() +
+  labs(x = 'Kilometers to South Africa',
+       y = 'Weekly incidence per K',
+       title = 'Protective effect of South African proximity',
+       subtitle = 'One point per district per year')
+
+```
+
+As an alternative to the above, we can visualize the same data with the same aesthetics, but overlaying each year.
+
+```{r}
+library(RColorBrewer)
+cols <- colorRampPalette(brewer.pal(n = 9, 'Spectral'))(length(unique(x$year)))
+ggplot(data = x,
+       aes(x = distance_to_south_africa,
+           y = p,
+           color = factor(year))) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(n = 5, span = 10, se = FALSE,
+              alpha = 0.5,
+              lty = 1) +
+  theme_maltem() +
+  labs(x = 'Kilometers to South Africa',
+       y = 'Weekly incidence per K',
+       title = 'Protective effect of South African proximity',
+       subtitle = 'One point per district per year') +
+  scale_color_manual(name = 'Year',
+                     values = cols)
+```
+
+Could the proximity to South Africa partly explain the pre-MALTEM decline in incidence in Magude? We'll examine this by modeling incidence as a linear function of district, distance, the interaction of year and distance, and month, in effect constructing a "counter-factual" for Magude that takes into account the secular decline in incidence associated with proximity to South Africa. For the model's purpose, we take into account only those 4 years from 2012-06-01 through 2016-06-01 (so as to not include the effect of MALTEM). Our model formula predicts incidence as a function of the interactions of season/year and distance/year, with the fixed effect of month.
+
+```{r}
+model_data <- 
+  df %>%
+  filter(disease == 'MALARIA') %>%
+  left_join(coords@data) %>%
+  mutate(season = ifelse(month %in% 1:4, 'rainy', 'not-rainy')) %>%
+  mutate(month = factor(month)) %>%
+  group_by(date, year, 
+           season,
+           month,
+           district, distance_to_south_africa) %>%
+  summarise(p = sum(cases) / sum(population) * 1000) %>%
+  ungroup
+
+
+fit <- lm(p ~ year*log(distance_to_south_africa)  + year + season*year + month, 
+          data = model_data %>%
+            filter(date <= '2016-06-01',
+                   date >= '2012-06-01'))
+
+DT::datatable(broom::tidy(fit))
+
+
+model_data$predicted <- predict(fit, model_data)
+
+ggplot() +
+  geom_line(data = model_data %>%
+         filter(district == 'MAGUDE'),
+       aes(x = date,
+           y = predicted),
+       alpha = 0.8) +
+  geom_line(data = model_data %>%
+         filter(district == 'MAGUDE'),
+       aes(x = date,
+           y = p),
+       color = 'red',
+       alpha = 0.8) +
+  labs(title = 'Weekly malaria incidence in Magude',
+       subtitle = 'Observed (red) vs. predicted (black)',
+       x = 'Date',
+       y = 'Cases per 1,000') +
+  theme_maltem()
+```
+
+
+# Effect of insecticide-treated bednets (ITN)
+
+At first glance, ITN coverage appears associated with lower malaria incidence
+
+```{r}
+ggplot(data = df %>% filter(disease == 'MALARIA'),
+       aes(x = itn_coverage,
+           y = pk)) +
+  geom_point(alpha = 0.3) +
+  theme_maltem() +
+  labs(x = 'ITN coverage',
+       y = 'Weekly incidence per 1,000',
+       title = 'ITN and malaria',
+       subtitle = 'One point per district, week, age-group') +
+  scale_x_log10()
+```
+
+
+# Effect of indoor residual spraying (IRS)
+
+```{r}
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  group_by(date, district, irs_coverage_people, weeks_since_last_irs_campaign_end) %>%
+  summarise(p = sum(cases) / sum(population) * 1000) %>%
+  ungroup %>%
+  mutate(irs_time_since = ifelse(weeks_since_last_irs_campaign_end <= 10,
+                                 '00-10',
+                                 ifelse(weeks_since_last_irs_campaign_end <= 50,
+                                        '11-50',
+                                        ifelse(weeks_since_last_irs_campaign_end <= 99,
+                                               '51-99',
+                                               ifelse(weeks_since_last_irs_campaign_end > 100,
+                                                      '99+',
+                                                      NA))))) %>%
+  filter(!is.na(weeks_since_last_irs_campaign_end)) %>%
+  mutate(irs_coverage = ifelse(irs_coverage_people < 50,
+                               '00-50%',
+                               ifelse(irs_coverage_people <= 70,
+                                      '51-70%',
+                                      ifelse(irs_coverage_people <= 90,
+                                             '71-90%',
+                                             ifelse(irs_coverage_people > 90,
+                                                    '91+%',
+                                                    '00%'))))) 
+
+ggplot(data = x,
+       aes(x = weeks_since_last_irs_campaign_end,
+           y = p)) +
+  geom_point(alpha = 0.3) +
+  facet_wrap(~irs_coverage) +
+  labs(x = 'Weeks since last IRS campaign end',
+       y = 'Incidence per 1,000',
+       title = 'Effect of IRS',
+       subtitle = 'Faceted by coverage percentage') +
+  theme_maltem()
+
+```
+
+# Incorporating more variables
+
+Here's what happens when we model cases using ITN, IRS, time since IRS campaign, seasonality, etc.
+
+```{r}
+model_data <- 
+  df %>%
+  filter(disease == 'MALARIA') %>%
+  left_join(coords@data) %>%
+  mutate(season = ifelse(month %in% 1:4, 'rainy', 'not-rainy')) %>%
+  mutate(month = factor(month)) %>%
+  group_by(date, year, 
+           season,
+           month,
+           irs_coverage_people,
+           weeks_since_last_irs_campaign_end,
+           itn_coverage,
+           district, distance_to_south_africa) %>%
+  summarise(p = sum(cases) / sum(population) * 1000) %>%
+  ungroup
+
+
+fit <- lm(p ~ year*log(distance_to_south_africa)  + year + season*year  + month +  irs_coverage_people*weeks_since_last_irs_campaign_end + itn_coverage + district, 
+          data = model_data %>%
+            filter(date <= '2016-06-01',
+                   date >= '2012-06-01'))
+
+x <- model_data %>% filter(district == 'MAGUDE')
+x$predicted <- predict(fit, x)
+
+ggplot() +
+  geom_line(data = x,
+       aes(x = date,
+           y = predicted),
+       alpha = 0.8) +
+  geom_line(data = x,
+       aes(x = date,
+           y = p),
+       color = 'red',
+       alpha = 0.8) +
+  labs(title = 'Weekly malaria incidence in Magude',
+       subtitle = 'Observed (red) vs. predicted (black)',
+       x = 'Date',
+       y = 'Cases per 1,000') +
+  theme_maltem()
+
+```
+
+
+
+
 # Questions
 
 1. What are the mathematics of the method by which we assign weights to synthetic control districts? Are we concerned that so few districts get any weight?
+
+2. Given that proximity to South Africa seems to have an interactive effect with the decline in malaria incidence, should we include this in our model? If so, how?
+
+3. Are we currently excluding Manhiça from our synthetic controls? If so, why?
+
+4. What are we doing with IRS / ITN?
+
+5. How are we treating secular trends (ie, near linear decline in springtime malaria in Magude for the 4 years from 2012-2015)?
+

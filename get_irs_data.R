@@ -195,3 +195,27 @@ if('irs_data_cleaned.RData' %in% dir('data/binaries')){
   save(irs,
        file = 'data/binaries/irs_data_cleaned.RData')
 }
+
+# Come up with protection function
+irs_protect <- function(weeks = 1:52){
+  # Conjure up an effectiveness curve
+  the_curve <- 1 - ((weeks)^(5) / (52^(5)))
+  the_curve <- ifelse(the_curve > 1, 1, 
+                      ifelse(the_curve < 0, 0, the_curve))
+  the_curve <- the_curve
+  return(the_curve)
+}
+
+
+# 
+# x <- data.frame(weeks = 1:52,
+#                 protection = irs_protect() * 100)
+# ggplot(data = x,
+#        aes(x = weeks,
+#            y = protection)) +
+#   geom_area(alpha = 0.6,
+#             fill = 'darkorange') +
+#   labs(x = 'Weeks',
+#        y = 'Protection (%)',
+#        title = 'IRS protection over time',
+#        subtitle = 'Y-axis: percentage of maximum coverage rate')
