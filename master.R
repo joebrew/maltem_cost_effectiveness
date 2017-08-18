@@ -165,21 +165,21 @@ df_agg <- df %>%
             wind_speed_max = first(wind_speed_max),
             distance_to_land_border = first(distance_to_land_border))
 
-# # Write data for sharing with collaborators
-write_csv(df_agg, 'data/outputs/cases_population_weather_itn_irs_pooled_age_groups.csv')
-write_csv(df_young, 'data/outputs/cases_population_weather_itn_irs_young_only.csv')
-write_csv(df_old, 'data/outputs/cases_population_weather_itn_irs_old_only.csv')
-write_csv(df, 'data/outputs/cases_population_weather_itn_irs.csv')
-write_csv(bes, 'data/outputs/cases_only.csv')
-write_csv(pop, 'data/outputs/population.csv')
-# Write csv for weather data
-write_csv(weather_weekly, 'data/outputs/weather_weekly.csv')
-write_csv(weather, 'data/outputs/weather_daily.csv')
-# write_csv(wide_weather, 'data/outputs/weather_wide.csv')
-# Write csv for itn data
-write_csv(itn, 'data/outputs/itn.csv')
-# Write csv for irs data
-write_csv(irs, 'data/outputs/irs.csv')
+# # # Write data for sharing with collaborators
+# write_csv(df_agg, 'data/outputs/cases_population_weather_itn_irs_pooled_age_groups.csv')
+# write_csv(df_young, 'data/outputs/cases_population_weather_itn_irs_young_only.csv')
+# write_csv(df_old, 'data/outputs/cases_population_weather_itn_irs_old_only.csv')
+# write_csv(df, 'data/outputs/cases_population_weather_itn_irs.csv')
+# write_csv(bes, 'data/outputs/cases_only.csv')
+# write_csv(pop, 'data/outputs/population.csv')
+# # Write csv for weather data
+# write_csv(weather_weekly, 'data/outputs/weather_weekly.csv')
+# write_csv(weather, 'data/outputs/weather_daily.csv')
+# # write_csv(wide_weather, 'data/outputs/weather_wide.csv')
+# # Write csv for itn data
+# write_csv(itn, 'data/outputs/itn.csv')
+# # Write csv for irs data
+# write_csv(irs, 'data/outputs/irs.csv')
 
 # # Join with wide weather
 # df_wide <- 

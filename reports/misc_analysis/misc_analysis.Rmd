@@ -258,8 +258,8 @@ ggplot(data = x,
                      values = c('red', 'black')) +
   labs(title = 'Monthly incidence: Magude vs. Manhiça',
        subtitle = 'All age groups, zoom-in') +
-  theme_maltem() +
-  xlim(as.Date('2013-01-01'), max(x$date))
+  theme_maltem() #+
+  # xlim(as.Date('2013-01-01'), max(x$date))
 
 ```
 
