@@ -1,0 +1,553 @@
+---
+title: "Publication-quality visualizations for MALTEM effectiveness paper"
+subtitle: "Reproducible code and output"
+author: "Brew, Cirera, Sicuri, Thomas"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+What follows is the code used for the generation of publication quality figures. Note that certain dependencies' source code are not included in this document (for example, references to other `R` scripts); in these cases, all code is available at https://github.com/joebrew/maltem_cost_effectiveness.
+
+
+
+```{r setup, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+
+knitr::opts_chunk$set(comment = NA, 
+               echo = TRUE, 
+               warning = FALSE, 
+               message = FALSE, 
+               error = TRUE, 
+               # fig.height = 5,
+               # fig.width = 8,
+               fig.align = 'center')
+
+```
+
+```{r}
+# Data preparation
+source('master.R')
+
+# Define theme for plotting
+# Borrowed from https://rpubs.com/Koundy/71792
+theme_publication <- function(base_size=14) {
+  library(grid)
+  library(ggthemes)
+  (theme_foundation(base_size=base_size)
+    + theme(plot.title = element_text(face = "bold",
+                                      size = rel(1.2), hjust = 0.5),
+            text = element_text(),
+            panel.background = element_rect(colour = NA),
+            plot.background = element_rect(colour = NA),
+            panel.border = element_rect(colour = NA),
+            axis.title = element_text(face = "bold",size = rel(1)),
+            axis.title.y = element_text(angle=90,vjust =2),
+            axis.title.x = element_text(vjust = -0.2),
+            axis.text = element_text(), 
+            axis.line = element_line(colour="black"),
+            axis.ticks = element_line(),
+            panel.grid.major = element_line(colour="#f0f0f0"),
+            panel.grid.minor = element_blank(),
+            legend.key = element_rect(colour = NA),
+            legend.position = "bottom",
+            legend.direction = "horizontal",
+            legend.key.size= unit(0.5, "cm"),
+            legend.margin = unit(0, "cm"),
+            legend.title = element_text(face="italic"),
+            plot.margin=unit(c(10,5,5,5),"mm"),
+            strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
+            strip.text = element_text(face="bold")
+    ))
+}
+
+colors <- colorRampPalette(c('orange', 'red', 'darkgrey'))(3)
+
+scale_fill_publication <- function(...){
+  library(scales)
+  discrete_scale("fill",
+                 "Publication",
+                 manual_pal(values = colors
+                              # c("#386cb0","#fdb462","#7fc97f","#ef3b2c","#662506","#a6cee3","#fb9a99","#984ea3","#ffff33")
+                            ), ...)
+  
+}
+
+scale_colour_publication <- function(...){
+  library(scales)
+  discrete_scale("colour",
+                 "Publication",
+                 manual_pal(values = colors
+                            # c("#386cb0","#fdb462","#7fc97f","#ef3b2c","#662506","#a6cee3","#fb9a99","#984ea3","#ffff33")
+                            ), ...)
+  
+}
+
+# Remove certain areas as per Ranjeeta's filtering
+df <- 
+  df %>%
+  filter(disease == 'MALARIA',
+         district != 'XAI-XAI CITY',
+         district != 'MANHICA',
+         district != 'MASSINGIR') 
+
+model_data <- df %>%
+    filter(age_group == '0-4') 
+
+# Get a standardized time variable
+model_data <-
+  model_data %>%
+  mutate(time = as.Date(paste0(year, '-01-01')) + (week*7)) %>%
+  mutate(time = as.numeric(time)) %>%
+  mutate(high_season = ifelse(month %in% 1:3, 1, 0))
+
+# Generate a oct-dec lag
+high_season <- model_data %>%
+  filter(high_season == 1) %>%
+  group_by(district, year) %>%
+  summarise(cases = mean(pk)) %>%
+  ungroup %>%
+  group_by(district) %>%
+  mutate(cases_lag = dplyr::lag(cases, n = 1, default = NA)) %>%
+  ungroup %>%
+  dplyr::select(-cases)
+model_data <-
+  left_join(model_data,
+            high_season)
+# Get 1 week lags too
+model_data <-
+  model_data %>%
+  arrange(date) %>%
+  group_by(district) %>%
+  mutate(cases_lag1 = dplyr::lag(pk, n = 1, default = NA),
+         cases_lag2 = dplyr::lag(pk, n = 2, default = NA))
+
+# Filter away some stuff
+model_data <- 
+  model_data %>%
+  filter(week < 52) %>%
+  filter(date >= '2013-10-01')
+
+# Get data with dummies
+model_formula <- lm(pk ~  high_season + year + time, data = model_data)
+model_matrix <- data.frame(model.matrix(model_formula)) %>%
+  dplyr::select(-`X.Intercept.`) %>%
+  mutate(pk = model_data$pk,
+         district = model_data$district,
+         itn_coverage = model_data$itn_coverage) %>%
+  mutate(district_name = district) %>%
+  mutate(district = as.numeric(factor(district)),
+         cases_lag = model_data$cases_lag,
+         cases_lag1 = model_data$cases_lag1,
+         cases_lag2 = model_data$cases_lag2)
+
+left <- 
+  expand.grid(district = sort(unique(model_matrix$district)),
+              time = sort(unique(model_matrix$time)))
+right <- 
+  model_matrix %>%
+  group_by(district, time) %>%
+  tally
+balanced <- left_join(left, right)
+model_matrix <-
+  left_join(left, model_matrix)
+
+```
+
+# Map
+
+```{r, fig.width = 8, fig.height = 5}
+library(cism)
+library(sp)
+library(tidyverse)
+library(broom)
+library(maptools)
+library(RColorBrewer)
+library(ggrepel)
+
+data <- moz3
+data <- data[data@data$NAME_1 %in% c('Maputo', 'Gaza'),]
+data@data$id <- paste0(data@data$NAME_1,
+                       '|',
+                       data@data$NAME_2)
+data <- tidy(data, region = 'id')
+data$province <- 
+  unlist(lapply(strsplit(data$id, '|', fixed = TRUE), function(x){x[1]}))
+data$district <- 
+  unlist(lapply(strsplit(data$id, '|', fixed = TRUE), function(x){x[2]}))
+
+label_df <- data %>%
+  group_by(district) %>%
+  summarise(long = mean(long),
+            lat = mean(lat))
+
+# Get centroids of provinces
+centroids_p <-
+  moz1@data %>%
+  bind_cols(coordinates(moz1) %>% data.frame() %>% rename(x = X1, y = X2))
+
+g1 <- ggplot() +
+  theme_publication() +
+  geom_polygon(data = cism::moz0_fortified,
+               aes(x = long,
+                   y = lat,
+                   group = group),
+               fill = 'white',
+               color = 'black',
+               size = 0.2) +
+  geom_polygon(data = data,
+               aes(x = long,
+                   y = lat,
+                   group = group,
+                   fill = province),
+               alpha = 0.5) +
+  coord_map() +
+  geom_polygon(data = data,
+               aes(x = long,
+                   y = lat,
+                   group = group),
+               color = 'black',
+               fill = NA,
+               alpha = 0.6,
+               size = 0.2) +
+  scale_fill_manual(name = 'Province',
+                    values = grey(c(0.05, 0.35))) +
+  # geom_label_repel(data = label_df,
+  #            aes(x = long,
+  #                y = lat,
+  #                label = district),
+  #            label.padding = unit(0.05, "lines"),
+  #            size = 3,
+  #            alpha = 0.9) +
+  geom_label_repel(data = centroids_p %>%
+                     filter(NAME_1 %in% c('Gaza', 'Maputo')),
+             aes(x = x,
+                 y = y,
+                 label = NAME_1),
+             label.padding = unit(0.05, "lines"),
+             box.padding = unit(3, 'lines'),
+             arrow = arrow(length = unit(0.02, "npc")),
+             size = 7,
+             alpha = 0.9,
+             segment.alpha = 0.6,
+             alpha = 0.8,
+             min.segment.length = unit(0, "lines")) +
+  labs(x = 'Longitude',
+       y = 'Latitude') +
+  ggthemes::theme_map() +
+  coord_map() +
+  theme(legend.position = 'none',
+        legend.text = element_text(size = 13)) +
+  theme(plot.title = element_text(size=13),
+        plot.subtitle = element_text(size = 16))
+
+g2 <- ggplot() +
+  coord_map() +
+  theme_publication() +
+  geom_polygon(data = data,
+               aes(x = long,
+                   y = lat,
+                   group = group),
+               color = 'black',
+               fill = NA,
+               alpha = 0.6,
+               size = 0.2) +
+  scale_fill_manual(name = 'Province',
+                    values = grey(c(0.05, 0.35))) +
+  # geom_label_repel(data = label_df,
+  #            aes(x = long,
+  #                y = lat,
+  #                label = district),
+  #            label.padding = unit(0.05, "lines"),
+  #            size = 3,
+  #            alpha = 0.9) +
+  labs(x = 'Longitude',
+       y = 'Latitude') +
+  ggthemes::theme_map() +
+  coord_map() +
+  theme(legend.position = 'right',
+        legend.text = element_text(size = 13)) +
+  theme(plot.title = element_text(size=13),
+        plot.subtitle = element_text(size = 16)) +
+    geom_polygon(data = data %>%
+                   filter(district == 'Magude'),
+               aes(x = long,
+                   y = lat,
+                   group = group),
+               alpha = 0.5,
+               fill = grey(0.1)) +
+    geom_label_repel(data = data %>%
+                       filter(district == 'Magude') %>%
+                       group_by(district) %>%
+                       summarise(long = mean(long),
+                                 lat = mean(lat)),
+             aes(x = long,
+                 y = lat,
+                 label = district),
+             label.padding = unit(0.05, "lines"),
+             box.padding = unit(6, 'lines'),
+             arrow = arrow(length = unit(0.02, "npc")),
+             size = 7,
+             alpha = 0.9,
+             segment.alpha = 0.6,
+             alpha = 0.8,
+             min.segment.length = unit(0, "lines"),
+             nudge_x = 2)
+
+
+library(grid)
+library(gridExtra)
+g <- grid.arrange(g1, g2, top = textGrob("Geography of intervention and control areas", gp=gpar(fontsize=15, fontface = 2)), ncol = 2)
+
+# Define functionfor siaving files
+save_figs <- function(g){
+  if(!dir.exists('figs')){
+    dir.create('figs')
+  }
+  file_name <- paste0(Sys.time())
+  ggsave(filename = paste0('figs/', file_name, '.pdf'), g)
+  ggsave(filename = paste0('figs/', file_name, '.png'), g)
+
+}
+save_figs(g)
+```
+
+# Trends in weekly incidence
+
+```{r}
+plot_data <-  df %>%
+           mutate(location = ifelse(district == 'MAGUDE',
+                                    'Magude',
+                                    'Control districts')) %>%
+           group_by(date, age_group, location) %>%
+           summarise(cases = sum(cases),
+                     population = sum(population)) %>%
+           ungroup %>%
+           mutate(pk = cases / population * 1000) %>%
+  mutate(location = factor(location,
+                           levels = c('Magude',
+                                      'Control districts'))) %>%
+  mutate(age_group = paste0('Age ', age_group))
+
+g <- 
+  ggplot(data =plot_data,
+         aes(x = date,
+             y = pk)) +
+  geom_line(aes(linetype = location,
+                color = location),
+            alpha = 0.8) +
+  facet_wrap(~age_group) +
+  labs(x = 'Week',
+       y = 'Cases per 1,000',
+       title = 'Weekly incidence') +
+  scale_linetype_manual(name = '',
+                        values = c(1,2)) +
+  theme_publication() +
+  scale_color_manual(name = '',
+                     values = c(grey(0.1), 'black')) +
+  geom_vline(xintercept = as.Date('2015-10-10'),
+             col = 'black',
+             alpha = 0.8) +
+  geom_label(data = data.frame(x = as.Date('2015-10-10'),
+                              y = 20,
+                              label = 'Intervention\nstart'),
+             aes(x = x,
+                 y = y,
+                 label = label),
+             size = 2.5)
+g
+save_figs(g)
+
+```
+
+# Cases as a percentage of total period average, ages 0-4 years
+
+```{r}
+
+# Define date truncation
+date_truncate <- function (date_object, level = c("month", "quarter", "year")) 
+  {
+    if (is.null(level)) {
+      stop("You must provide a level argument of either \"month\", \"quarter\" or \"year\".")
+    }
+    date_object <- as.Date(date_object)
+    if (sum(!is.na(date_object)) == 0) {
+      return(date_object)
+    }
+    if (level == "month") {
+      return_object <- date_object
+      return_object[!is.na(return_object)] <- as.Date(paste0(format(return_object[!is.na(return_object)], 
+                                                                    "%Y-%m"), "-01"))
+      return(return_object)
+    }
+    if (level == "quarter") {
+      q_month <- (((((as.numeric(format(date_object, "%m"))) - 
+                       1)%/%3) + 1) * 3) - 2
+      return_object <- date_object
+      return_object[!is.na(return_object)] <- as.Date(paste0(format(return_object[!is.na(return_object)], 
+                                                                    "%Y"), ifelse(nchar(q_month[!is.na(return_object)]) == 
+                                                                                    2, "-", "-0"), q_month, "-01"))
+      return(return_object)
+    }
+    if (level == "year") {
+      return_object <- date_object
+      return_object[!is.na(return_object)] <- as.Date(paste0(format(return_object[!is.na(return_object)], 
+                                                                    "%Y"), "-01-01"))
+      return(return_object)
+    }
+  }
+
+# Get a date helper for standardizing dates
+wh <- create_date_helper()
+wh$month <- as.numeric(format(wh$date, '%m'))
+
+# MANHICA OPD ########################################
+load('misc_data/opd_cleaned.RData')
+opd_manhica <- opd %>%
+  filter(malaria) %>%
+  filter(date >= min(bes$date)) %>%
+  mutate(age_group = ifelse(age < (5 * 12), '0-4',
+                            ifelse(age >= (5 * 12), '5+',
+                                   NA))) %>%
+  dplyr::select(age_group, date) %>%
+  mutate(year = as.numeric(format(date, '%Y')),
+         month = as.numeric(format(date, '%m')),
+         week = as.numeric(format(date, '%U')) + 1) %>%
+  group_by(year, week, age_group) %>%
+  summarise(cases = n()) %>%
+  ungroup %>%
+  mutate(district = 'MANHICA',
+         source = 'OPD')
+opd_manhica_under5 <-
+  opd_manhica %>%
+  filter(age_group == '0-4') %>%
+  group_by(year, week, district, source) %>%
+  summarise(cases = sum(cases, na.rm = TRUE))
+
+# MAGUDE OPD ###########################################
+# Read in old OPD Magude data, sent by Bea
+old_opd <- readstata13::read.dta13('misc_data/opd_magude_old/survmag_rrs_dis.dta')
+old_opd <-
+  old_opd %>%
+  dplyr::select(yr,
+                week,
+                mal_hf) %>%
+  rename(year = yr,
+         cases = mal_hf)
+
+opd_magude_all <- old_opd
+opd_magude_all$district <- 'MAGUDE'
+opd_magude_all$source <- 'OPD'
+rm(old_opd)
+
+# Combine all sources
+comparison_magude <-
+  opd_magude_all %>%
+  bind_rows(bes %>%
+              filter(district == 'MAGUDE',
+                     disease == 'MALARIA') %>%
+              group_by(year, week, district) %>%
+              summarise(cases = sum(cases, na.rm = TRUE)) %>%
+              ungroup %>%
+              mutate(source = 'BES')) %>%
+  left_join(wh) %>%
+  group_by(year, month, source, district) %>%
+  summarise(date = first(date),
+            cases = sum(cases, na.rm = TRUE))
+
+comparison_manhica <-
+  opd_manhica_under5 %>%
+  bind_rows(bes %>%
+              filter(district == 'MANHICA',
+                     age_group == '0-4',
+                     disease == 'MALARIA') %>%
+              group_by(year, week, district) %>%
+              summarise(cases = sum(cases, na.rm = TRUE)) %>%
+              ungroup %>%
+              mutate(source = 'BES')) %>%
+  left_join(wh) %>%
+  group_by(year, month, source, district) %>%
+  summarise(date = first(date),
+            cases = sum(cases, na.rm = TRUE))
+
+g1 <- ggplot(data = comparison_magude,
+       aes(x = date,
+           y = cases,
+           color = source)) +
+  geom_line(alpha = 0.8) +
+  labs(title = 'Magude: all cases',
+       x = 'Date',
+       y = 'Cases') +
+  theme_cism() +
+  scale_color_manual(name = 'Source',
+                     values = c('darkgreen', 'darkorange'))
+
+g2 <- ggplot(data = comparison_manhica,
+       aes(x = date,
+           y = cases,
+           color = source)) +
+  geom_line(alpha = 0.8) +
+  labs(title = 'Manhica: 0-4 only',
+       x = 'Date',
+       y = 'Cases') +
+  theme_cism() +
+  scale_color_manual(name = 'Source',
+                     values = c('darkgreen', 'darkorange'))
+
+
+# Comparison manhica
+x <- 
+  comparison_manhica %>%
+  ungroup %>%
+  group_by(district, source) %>%
+  mutate(avg = mean(cases)) %>%
+  ungroup %>%
+  mutate(y = cases / avg * 100)
+g <- 
+  ggplot(data = x %>%
+  filter(date <= '2016-08-30'),
+       aes(x = date,
+           y = y, 
+           linetype = source)) +
+  geom_line(alpha = 0.8) +
+  labs(title = 'Cases as a percentage of total period average',
+       subtitle = 'Manhiça district, ages 0-4 only',
+       x = 'Date',
+       y = 'Percent') +
+  theme_publication() +
+  scale_linetype_manual(name = '',
+                     values = c(1, 2)) 
+g
+save_figs(g)
+```
+
+
+```{r}
+# Zip up all figures
+zip('figs/figures.zip',
+    files = paste0('figs/', dir('figs')))
+```
+
+```{r eval=FALSE}
+file.edit(
+  tufte:::template_resources(
+    'tufte_html', '..', 'skeleton', 'skeleton.Rmd'
+  )
+)
+```
+
+```{r bib, include=FALSE}
+# create a bib file for the R packages used in this document
+knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+```
