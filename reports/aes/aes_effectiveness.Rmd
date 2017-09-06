@@ -1,0 +1,768 @@
+---
+title: "Short-term impact of a malaria elimination campaign in Southern Mozambique"
+subtitle: Evidence from a quasi-experimental approach applied to routine surveillance data
+author: "AES, Barcelona, 2017"
+header-includes:
+  - \widowpenalties 1 150
+fig_height: 5
+fig_width: 7
+bibliography: bibliography.bib
+output:
+  beamer_presentation:
+    theme: "Berlin"
+    colortheme: "seahorse"
+    fonttheme: "structuresmallcapsserif"
+    toc: true
+---
+
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, comment = NA, error= FALSE, cache = F}
+library(knitr)
+opts_chunk$set(comment = NA, 
+               echo = FALSE, 
+               warning = FALSE, 
+               message = FALSE, 
+               error = TRUE, 
+               cache = FALSE)
+```
+
+```{r, results = 'hide'}
+# Packages
+library(ggplot2)
+library(cism)
+library(rgeos)
+library(maptools)
+library(rgdal)
+library(tidyr)
+library(RColorBrewer)
+library(dplyr)
+library(leaflet)
+library(readr)
+library(ggthemes)
+library(ggrepel)
+library(knitr)
+library(kableExtra)
+options(knitr.table.format = "html") 
+# Define a theme
+theme_maltem <- ggthemes::theme_hc
+```
+
+
+```{r}
+source('../../master.R', chdir = TRUE)
+
+tablify <- function(x, n = 5){
+  DT::datatable(x,
+                selection = 'none',
+                escape = FALSE,
+                options = list(#sDom  = '<"top">lrt<"bottom">ip',
+                               pageLength = n, 
+                               dom = 'tip'))
+}
+kablify <- function(x, size = 16){
+  kable(x) %>% 
+  kable_styling(bootstrap_options = c("striped",
+  "hover",
+  "condensed"),
+  font_size = size,
+  position = 'float_left')
+}
+
+# ## 
+# 
+# <img src="img/tree.jpg" alt="img/tree.jpg" style="width: 600px; align="center"/>
+
+# # Synthetic control reproduction
+# 
+# # Get packages
+# library(Synth)
+# 
+# # Prepare data
+# gen_dummy <- function(condition){ifelse(condition, 1, ifelse(!condition, 0, NA))}
+# 
+# model_data <- 
+#   df %>%
+#   filter(age_group == '0-4') %>%
+#   filter(disease == 'MALARIA',
+#          district != 'XAI-XAI CITY',
+#          district != 'MANHICA',
+#          district != 'MASSINGIR') 
+# 
+# # Get a standardized time variable
+# model_data <-
+#   model_data %>%
+#   mutate(time = as.Date(paste0(year, '-01-01')) + (week*7)) %>%
+#   mutate(time = as.numeric(time)) %>%
+#   mutate(high_season = ifelse(month %in% 1:3, 1, 0))
+# 
+# # Generate a oct-dec lag
+# high_season <- model_data %>%
+#   filter(high_season == 1) %>%
+#   group_by(district, year) %>%
+#   summarise(cases = mean(pk)) %>%
+#   ungroup %>%
+#   group_by(district) %>%
+#   mutate(cases_lag = dplyr::lag(cases, n = 1, default = NA)) %>%
+#   ungroup %>%
+#   dplyr::select(-cases)
+# model_data <-
+#   left_join(model_data,
+#             high_season)
+# # Get 1 week lags too
+# model_data <-
+#   model_data %>%
+#   arrange(date) %>%
+#   group_by(district) %>%
+#   mutate(cases_lag1 = dplyr::lag(pk, n = 1, default = NA),
+#          cases_lag2 = dplyr::lag(pk, n = 2, default = NA))
+# 
+# # Filter away some stuff
+# model_data <- 
+#   model_data %>%
+#   filter(week < 52) %>%
+#   filter(date >= '2013-10-01')
+# 
+# # Get data with dummies
+# model_formula <- lm(pk ~  high_season + year + time, data = model_data)
+# model_matrix <- data.frame(model.matrix(model_formula)) %>%
+#   dplyr::select(-`X.Intercept.`) %>%
+#   mutate(pk = model_data$pk,
+#          district = model_data$district,
+#          itn_coverage = model_data$itn_coverage) %>%
+#   mutate(district_name = district) %>%
+#   mutate(district = as.numeric(factor(district)),
+#          cases_lag = model_data$cases_lag,
+#          cases_lag1 = model_data$cases_lag1,
+#          cases_lag2 = model_data$cases_lag2)
+# 
+# left <- 
+#   expand.grid(district = sort(unique(model_matrix$district)),
+#               time = sort(unique(model_matrix$time)))
+# right <- 
+#   model_matrix %>%
+#   group_by(district, time) %>%
+#   tally
+# balanced <- left_join(left, right)
+# model_matrix <-
+#   left_join(left, model_matrix)
+# 
+# # Fill the NAs
+# model_matrix <-
+#   model_matrix %>%
+#   arrange(time) %>%
+#   group_by(district) %>%
+#   mutate(high_season = zoo::na.locf(high_season), 
+#          year = zoo::na.locf(year),
+#          pk = zoo::na.locf(pk),
+#          itn_coverage = zoo::na.locf(itn_coverage),
+#          district_name = zoo::na.locf(district_name))
+# 
+# model_matrix <- data.frame(model_matrix)
+#   
+# prior_time <- sort(unique(model_matrix$time))
+# prior_time <- prior_time[prior_time <= as.numeric(as.Date('2015-08-01'))]
+# prepared_data <- 
+#   Synth::dataprep(foo = model_matrix,
+#                   predictors = c('itn_coverage',
+#                                  'cases_lag',
+#                                  'cases_lag1',
+#                                  'cases_lag2'),
+#                   predictors.op = 'mean',
+#                   dependent = 'pk',
+#                   time.variable = 'time',
+#                   unit.variable = 'district',
+#                   treatment.identifier = which(sort(unique(model_data$district)) == 'MAGUDE'),
+#                   controls.identifier = which(sort(unique(model_data$district)) != 'MAGUDE'),
+#                   unit.names.variable = 'district_name',
+#                   time.predictors.prior = prior_time,
+#                   time.optimize.ssr = prior_time,
+#                   time.plot = sort(unique(model_matrix$time)))
+# 
+# out <- Synth::synth(data.prep.obj = prepared_data)
+# # synth_tab <- synth.tab(synth.res = out,
+# #           dataprep.res = prepared_data,
+# #           round.digit = 3)
+# # # Predictor weights
+# # out$solution.v
+# # # Unit weights
+# # out$solution.w
+```
+
+# Introduction
+
+## The burden of malaria
+
+- 2015: 212M cases; 429K deaths (global). 
+- Mozambique among ten highest burden countries in world. 
+- 29% reduction since 2010.  
+- Now, focus on _elimination_ and _eradication_.
+
+## How to eliminate
+
+- Mass drug administration (MDA).  
+- Other, more time-tested strategies (ITNs, IRS).
+- The need for operational research. 
+
+## It's hard to evaluate elimination strategies
+
+- Difficult to measure impact of interventions in operational research.  
+- OR is usually not experimental, not randomized, not controlled.
+- Before vs. after and case vs. control approaches are useful, but biased.
+
+## Why evaluate?
+
+- The WHO explicitly supports “the need for more research on the optimum methods of implementing MDA programs, promoting community participation and compliance with treatment, and evaluating their effectiveness.
+
+- As elimination initiatives imply both strong financial/economic efforts and a high risk of failure, their affordability, sustainability and cost-effectiveness are among the main concerns of funders, stakeholders and policymakers 
+
+- Evidence of the causal impact of malaria elimination initiatives is a pre-requisite for evaluating their cost-effectiveness. Finally, rigorous impact evaluations of malaria elimination programs are essential for sustained financial and political support. 
+
+## How to evaluate?
+
+- Since we don't have an experiment, we need quasi-experimental approaches.  
+- The synthetic control method (SCM).  
+- We want to construct a _realistic_ counterfactual telling us _what would have happened_ without the campaign.  
+
+## What are we evaluating, exactly?
+
+- Malaria elimination campaign in Magude.  
+- Deployed during rainy seasons of 2015-6 and 2016-7. 
+- Consisted of MDA, IRS, and surveillance. 
+- ITN coverage was already high from 2014.  
+
+
+# Methods
+
+## Data 
+
+- Mozambique’s Boletim Epidemiológico Semanal (BES) of the NMCP.  
+- Weekly clinical cases, by age group, by health facility, for each of a few high risk diseases
+, the epidemic disease reporting system used by the NMCP. 
+- Population estimates from the National Statistical Institute (INE).  
+
+## Identification strategy
+
+- Treatment group is district of Magude, Maputo province. 
+- Control group consists of the other districts in Maputo and Gaza province. 
+- The selection of control districts from locations around Magude is to ensure treatment and control groups have similar epidemiological characteristics. 
+
+## Co-variates
+
+Our analysis uses variables as predictors of malaria incidence:  
+
+- LLINs   
+
+- Average weekly temperature  
+
+- Weekly rainfall
+
+## Rainfall  
+
+```{r}
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  mutate(place = factor(place, levels = c('Other districts', 'Magude'))) %>%
+  mutate(date = as.Date(paste0(year, '-', month, '-01'))) %>%
+  group_by(date, district, place) %>%
+  summarise(precipitation = mean(precipitation),
+            temp = mean(temp),
+            temp_max = max(temp_max),
+            temp_min = min(temp_min))
+
+g <- ggplot() +
+  geom_line(alpha = 0.2,
+            data = x %>% filter(place == 'Other districts'),
+       aes(x = date,
+           y = precipitation,
+           group = district)) +
+    geom_line(alpha = 0.8,
+              color = 'darkred',
+            data = x %>% filter(place == 'Magude'),
+       aes(x = date,
+           y = precipitation,
+           group = district)) +
+  labs(x = 'Date',
+       y = 'Milimeters',
+       title = 'Precipitation: Magude vs. other districts',
+       subtitle = 'Monthly average precipitation, Magude in red') +
+  theme_maltem()
+g 
+```
+
+## Temperature
+
+```{r}
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  mutate(place = factor(place, levels = c('Other districts', 'Magude'))) %>%
+  mutate(date = as.Date(paste0(year, '-', month, '-01'))) %>%
+  group_by(date, district, place) %>%
+  summarise(precipitation = mean(precipitation),
+            temp = mean(temp),
+            temp_max = max(temp_max),
+            temp_min = min(temp_min))
+
+ggplot() +
+  geom_line(alpha = 0.2,
+            data = x %>% filter(place == 'Other districts'),
+       aes(x = date,
+           y = temp,
+           group = district)) +
+    geom_line(alpha = 0.8,
+              color = 'darkred',
+            data = x %>% filter(place == 'Magude'),
+       aes(x = date,
+           y = temp,
+           group = district)) +
+  labs(x = 'Date',
+       y = 'Degrees (celcius)',
+       title = 'Average temperature: Magude vs. other districts',
+       subtitle = 'Monthly average, Magude in red') +
+  theme_maltem() +
+  xlim(as.Date('2014-01-01'),
+               max(x$date))
+```
+
+
+
+## Difference in differences
+
+- We _could_ compare changes in malaria incidence to other districts using a difference-in-differences (DD) model. 
+- Often used to estimate treatment effects in such settings by contrasting changes in outcome pre- and -post intervention, for the treatment and control groups.
+- Eliminates confounding due to time-invariant differences between treatment and control groups, arising from unobservable factors that might influence malaria incidence. 
+- Assumes that any macro shocks such as time effects are common to the groups under evaluation. 
+
+## Why we can't use difference in differences
+
+```{r}
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  mutate(date = as.Date(paste0(year, '-', month, '-01'))) %>%
+  group_by(date, place) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+g1 <- ggplot(data = x,
+       aes(x = date,
+           y = p,
+           group = place)) +
+  geom_line(aes(color = place), alpha = 0.8) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  labs(x = 'Date',
+       y = 'Monthly cases per 1,000') +
+  scale_color_manual(name = 'District',
+                     values = c('red', 'black')) +
+  labs(title = 'Incidence: Magude vs. other districts',
+       subtitle = 'All age groups') +
+  theme_maltem() +
+  xlim(as.Date('2013-01-01'), max(x$date))
+
+
+x2 <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  mutate(date = as.Date(paste0(year, '-', month, '-01'))) %>%
+  group_by(date, place) %>%
+  summarise(p = sum(cases) / sum(population) * 1000) %>%
+  group_by(date) %>%
+  summarise(magude_to_other = p[place == 'Magude'] / 
+              p[place == 'Other districts'] * 100)
+
+g2 <- ggplot(data = x2,
+       aes(x = date,
+           y = magude_to_other)) +
+  geom_line(alpha = 0.8) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  geom_hline(yintercept = 100,
+             col = 'darkred',
+             alpha = 0.6,
+             lty = 2) +
+  labs(x = 'Date',
+       y = 'Percent') +
+  labs(title = 'Magude incidence as % of other districts',
+       subtitle = 'All age groups') +
+  theme_maltem() +
+  xlim(as.Date('2013-01-01'), max(x$date))
+Rmisc::multiplot(g1, g2, cols = 2)
+```
+
+## Why not DiD?  
+
+- Magude shows a downward trend in incidence over time, even prior to the elimination campaign.
+- Lack of a visible parallel trend between treatment and control groups 
+
+## SCM
+
+- We employ the synthetic control method (SCM).  
+- Weighted combination of potential control districts, the synthetic control, using the districts that best approximate the most relevant characteristics of malaria incidence in Magude before the intervention. 
+- Characteristics include pre-intervention malaria incidence during rainy season, temperature and and rainfall.
+- Good match based on RMSE.  
+
+## Advantages of SCM
+
+- Makes explicit the relative contribution of selected control districts to the counterfactual; the similarities between Magude and the synthetic control can be evaluated by comparing pre-intervention outcomes and predictors.  
+- Allows the effects of unobserved factors on malaria incidence to vary with time, relaxing the parallel trend assumption of DD discussed earlier. 
+
+## Limitations of SCM
+
+- Does not allow assessing the significance of the results using commonly used (large-sample) inferential techniques. 
+- Instead, we use placebo experiments based on permutation techniques to make inference:  sequentially applying the SCM assuming each control district was “treated” to generate a distribution of placebo effects, and compare Magude's effect with these distributions.
+
+# Results
+
+
+
+## All districts' incidences (aggregated age groups)
+
+```{r}
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  group_by(date, district) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+ggplot(data = x,
+       aes(x = date,
+           y = p)) +
+  geom_line(alpha = 0.8,
+            color = 'darkred') +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  labs(x = 'Date',
+       y = 'Weekly cases per 1,000') +
+  scale_color_manual(name = 'District',
+                     values = c('red', 'black')) +
+  labs(title = 'Weekly incidence: all districts',
+       subtitle = 'All age groups') +
+  theme_maltem() +
+  facet_wrap(~district) +
+  theme(legend.position="none") +
+  theme(strip.background = element_rect(fill="white"),
+        strip.text = element_text(color = grey(0.1), size = 6)) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+## All districts' incidences (separated by age groups)
+
+
+```{r}
+
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  group_by(date, age_group, district) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+ggplot(data = x,
+       aes(x = date,
+           y = p,
+           group = age_group,
+           color = age_group)) +
+  geom_line(alpha = 0.8) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  labs(x = 'Date',
+       y = 'Weekly cases per 1,000') +
+  scale_color_manual(name = 'District',
+                     values = c('darkorange', 'darkgreen')) +
+  labs(title = 'Weekly incidence: all districts',
+       subtitle = 'Segregated by age group') +
+  theme_maltem() +
+  facet_wrap(~district) +
+  # theme(legend.position="none") +
+  theme(strip.background = element_rect(fill="white"),
+        strip.text = element_text(color = grey(0.1), size = 6)) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+## Magude vs. other districts  
+
+```{r}
+
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  group_by(date, place) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+ggplot(data = x,
+       aes(x = date,
+           y = p,
+           group = place)) +
+  geom_line(aes(color = place), alpha = 0.8) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  labs(x = 'Date',
+       y = 'Weekly cases per 1,000') +
+  scale_color_manual(name = 'District',
+                     values = c('red', 'black')) +
+  labs(title = 'Weekly incidence: Magude vs. other districts',
+       subtitle = 'All age groups') +
+  theme_maltem()
+```
+
+## Magude vs. other districts (separated by age group)
+
+```{r}
+
+x <- df %>%
+  filter(disease == 'MALARIA') %>%
+  mutate(place = ifelse(district == 'MAGUDE', 'Magude',  'Other districts')) %>%
+  group_by(date, place, age_group) %>%
+  summarise(p = sum(cases) / sum(population) * 1000)
+
+ggplot(data = x,
+       aes(x = date,
+           y = p,
+           group = place)) +
+  geom_line(aes(color = place), alpha = 0.8) +
+  geom_vline(xintercept = as.numeric(as.Date(paste0(2010:2017, '-01-01'))),
+             color = 'black',
+             alpha = 0.3) +
+  labs(x = 'Date',
+       y = 'Weekly cases per 1,000') +
+  scale_color_manual(name = 'District',
+                     values = c('red', 'black')) +
+  labs(title = 'Weekly incidence: Magude vs. other districts',
+       subtitle = 'Segregated by age group') +
+  theme_maltem() +
+  facet_wrap(~age_group)
+```
+
+## Our weighted synthetic control
+
+
+```{r}
+uw <-
+  df %>%
+  filter(age_group == '0-4') %>%
+  filter(disease == 'MALARIA',
+         district != 'XAI-XAI CITY',
+         district != 'MANHICA',
+         district != 'MASSINGIR') %>%
+  group_by(district) %>%
+  tally
+uw$w.weight <-
+  c(0.00,
+    0.22,
+    0.00,
+    0.19,
+    0.01,
+    0.00,
+    0.00,
+    0.27,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.07,
+    0.00,
+    0.00,
+    0.24
+    )
+uw$age_group <- '0 to 4'
+
+older <- uw
+older$age_group <- '5+'
+older$w.weight <- 
+  c(0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.10,
+    0.00,
+    0.00,
+    0.26,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.35,
+    0.29
+)
+uw <- bind_rows(uw, older)
+# Overwrite with Ranjeeta's weights!
+ggplot(data = uw,
+       aes(x = district,
+           y = w.weight)) +
+  geom_bar(stat = 'identity',
+           alpha = 0.6,
+           fill = 'darkorange') +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(x = 'District',
+       y = 'Weight',
+       title = 'Weights by district') +
+  ggthemes::theme_hc() +
+  facet_wrap(~age_group,
+             nrow = 2)
+```
+
+## Is it a good match?
+
+```{r}
+# Copy of Ranjeeta's table
+x <- dplyr::data_frame(Indicator = c('Incidence, rainy season 2015',
+                              'Incidence, rainy season 2014', 
+                              'LLIN coverage',
+                              'Pre-intervention precipitation',
+                              'Pre-intervention temperature',
+                              'Post-intervention precipitation'),
+                `Magude 0-4` = c(3.65, 8.87, 24.82, 1.71, 24.52, 1.84),
+                `Synthetic Magude 0-4` = c(5.1, 6.93, 24.77, 1.74, 24.51, 1.82),
+                `Magude 5+` = c(4.02, 8.53, 24.83, 1.7, 24.52, 1.84),
+                `Synthetic Magude 5+` = c(4.12, 6.29, 25.22, 1.71, 24.49, 1.83))
+```
+
+\begin{tiny}
+
+```{r}
+
+knitr::kable(x, format = 'latex')
+```
+
+\end{tiny}
+
+
+## 0-4 year-olds: Magude vs synthetic control  
+
+ 
+<!-- <img src="img/synthetic1.png" alt="img/synthetic1.png" style="width: 800px; align="center"/> -->
+
+\includegraphics[width=0.9\textwidth]{img/synthetic1}
+
+
+
+## 5+ year-olds: Magude vs synthetic control  
+ 
+ 
+<!-- <img src="img/synthetic2.png" alt="img/synthetic2.png" style="width: 800px; align="center"/> -->
+
+\includegraphics[width=0.9\textwidth]{img/synthetic2}
+
+
+
+## Effect of interevention
+
+Relative to the synthetic control, the average treatment effect during the first post-intervention malaria season was a reduction in weekly incidence by 4 and 2 cases per 1,000 in those aged 0-4 and 5 or older, respectively. During peak malaria season (January - March), 1,939 cases were prevented in 2016, and 3,405 in 2017. 
+
+<!-- <img src="img/ranjeeta_table.png" alt="img/ranjeeta_table.png" style="width: 600px; align="center"/> -->
+
+\includegraphics[width=0.9\textwidth]{img/ranjeeta_table}
+
+
+This represents a 91.29% and 81.3% reduction in the incidence of malaria relative to the hypothetical control.
+
+# Discussion
+
+## Our findings
+
+-  Across age groups during the peak malaria season (January-March) incidence declined by 91.29% and 81.3% in 2016 and 2017, respectively.  
+- Has not achieved zero cases.  
+- Unsure, at this point, to what extent we can attribute cases to importation or other causes. 
+
+## Comparison with other findings
+
+- Similar findings obtained in a cluster randomized controlled trial (RCT) estimating the effectiveness of MDA with DHA/PPQ in Zambia.
+
+- In that study, while the number of malaria cases significantly declined after MDA in low-transmission areas, drop was not significant in areas of high transmission (ie, Magude).
+
+- Also consistent with the predictions of a consensus study that put together 4 models focusing on the impact of MDA with a drug having similar characteristics as DHA/PPQ.  
+
+- The latter predicted an immediate (but transient w/o other interventions) decline in malaria prevalence after MDA.  
+
+## Quasi-experimental methods in similar contexts
+
+- Quasi-experimental approaches have been applied in other elimination campaigns.  
+
+- Barofsky et al. used SCM as an approach for the identification of the impact of a malaria campaign in a district in Uganda.   
+- These studies are from 50s-60s and look at economic indicators, such as primary school completion or households consumption.   
+- To our knowledge, this is the first quasi-experimental evaluation of an ongoing elimination initiative using routine national surveillance data on health indicators.   
+
+## Comparison with RCT
+
+- Randomized control trials (RCTs) are the gold standard for impact evaluations.   
+- However, the implementation of RCTs may imply financial, practical and ethical challenges.  
+- Furthermore, RCTs have debatable usefulness in identifying intervention feasibility and implementation bottlenecks, which are particularly important in disease elimination contexts.
+- Quasi-experimental approaches are particularly useful when applied to routinely collected (administrative/observational) data. 
+
+## Scaling up the method?
+
+- Given the focus over the last decade on malaria elimination with both large and small scale campaigns across the globe – quasi-experimental approaches offer a rigorous and inexpensive alternative to randomized-control trials. 
+
+- Observational data is widely (and often publicly) available and true experimental approaches are often not feasible:  quasi-experimental approaches like the SCM are an excellent alternative for the evaluation of malaria elimination initiatives. 
+
+- Approach is not only suitable for the estimation of the impact of the intervention in question, but also generalizable to malaria elimination campaigns globally.   
+
+## Limitations 
+
+1. We rely on surveillance malaria cases reported at the health facility level, which is an incomplete and imperfect proxy for true malaria infection incidence since health-seeking behavior is especially low in low-income countries settings and may be different across geography and time.
+
+2. The health facility registries from which we gathered data are themselves imperfect; we have no mechanisms by which to validate the entirety of the data. Still, BES data offers the best country-wide comparison of malaria trends at a granular level (weekly and by district).
+
+3. Even with quasi-experimental data, we still can't fully control for abnormalities... (see next slide)
+
+## 2017 has been anything but normal
+
+```{r}
+x <- 
+  df %>%
+  group_by(year, month) %>%
+  summarise(p = sum(cases) / sum(population) * 1000) %>%
+  ungroup %>%
+  mutate(year = factor(year))
+
+cols <- colorRampPalette(RColorBrewer::brewer.pal(n = 9, 'Spectral'))(length(unique(x$year)))
+ggplot(data = x,
+       aes(x = month,
+           y = p,
+           group = year,
+           color = year)) +
+  geom_line() +
+  geom_point() +
+  scale_color_manual(name = 'Year',
+                     values = cols) +
+  labs(x = 'Month',
+       y = 'Average incidence',
+       title = 'Incidence by month, all districts',
+       subtitle = 'Wide variability in monthly incidence') +
+  theme_maltem()
+
+```
+
+## Implications  
+
+- The strategy reduced malaria significantly.   
+- Effectiveness quantified accurately enough to allow for granular cost-effectiveness.   
+- Synthetic control method useful and generalizable for the estimation of similar initiatives’ effectiveness.   
+- Policy-makers, researchers, and those actively engaged in or planning disease elimination initiatives, can benefit from both the methods and findings from this study.
+
+## Acknowledgments
+
+- NMCP for releasing BES data.  
+- CISM for support.  
+- Bill and Melinda Gates Foundation and “La Caixa” Foundation for funding MALTEM.   
+- JB is funded by the Trans Global Health doctorate program. 
+
+
+
+
+
+
+
+
+
+
+
+
+
