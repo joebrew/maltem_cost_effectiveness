@@ -455,6 +455,8 @@ read_population <- function(sheet = 1,
       this_district  <- read_excel(file, 
                                    skip = district_starts[j] + 2,
                                    sheet = 1)[,1:2]
+      names(this_district) <- c('Idade', 'Total')
+      
       # Remove total lines
       this_district <- this_district[3:nrow(this_district),]
       # Remove other districts
@@ -508,6 +510,7 @@ read_population <- function(sheet = 1,
       this_district  <- read_excel(file, 
                                    skip = district_starts[j] + 2,
                                    sheet = 1)[,1:2]
+      names(this_district) <- c('Idade', 'Total')
       # Remove total lines
       this_district <- this_district[3:nrow(this_district),]
       # Remove other districts
@@ -586,9 +589,9 @@ bes <-
 bes$month <- as.numeric(format(bes$date, '%m'))
 bes$day <- as.numeric(format(bes$date, '%d'))
 
-# Keep only through may 2017
-bes <- bes %>%
-  filter(date <= '2017-05-31')
+# # Keep only through may 2017
+# bes <- bes %>%
+#   filter(date <= '2017-05-31')
 
 # reorder
 bes <- bes %>%
@@ -767,3 +770,4 @@ rm(district_matcher,
 #   summarise(cases = sum(cases),
 #             p = mean(p))
 rm(bes17)
+write_csv(df, '~/Desktop/bes.csv')
